@@ -44,7 +44,14 @@ test "basic add functionality" {
     const d = readPackedBits(ptr, 48, u16);
     try testing.expectEqual(@as(u16, 0), d);
 
-    // const data = std.mem.readIntNative(u64, buf[16..24]);
+    const data = std.mem.readIntNative(u64, buf[16..24]);
+    const year = readPackedBits(data, 0, i16);
+    const month = readPackedBits(data, 16, u8);
+    const day = readPackedBits(data, 24, u8);
+
+    try testing.expectEqual(@as(i16, 2023), year);
+    try testing.expectEqual(@as(u8, 7), month);
+    try testing.expectEqual(@as(u8, 14), day);
 
     try testing.expect(add(3, 7) == 10);
 }
