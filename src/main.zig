@@ -12,7 +12,7 @@ fn readPackedBits(data: u64, comptime lsb_offset: u6, comptime T: type) T {
     });
 
     const x = data >> lsb_offset;
-    return @bitCast(T, @truncate(UT, x));
+    return @bitCast(@as(UT, @truncate(x)));
 }
 
 test "basic add functionality" {
