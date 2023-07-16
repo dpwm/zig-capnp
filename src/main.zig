@@ -156,3 +156,16 @@ test "simple struct unpacking" {
     try std.testing.expectEqual(@as(u8, 7), s.getMonth());
     try std.testing.expectEqual(@as(u8, 14), s.getDay());
 }
+
+test "simple struct unpacking (negative year)" {
+    var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_datem_20230714.bin", .{});
+    defer file.close();
+
+    var message = try Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+    const s = message.getRootStruct(Date);
+
+    try std.testing.expectEqual(@as(i16, -2023), s.getYear());
+    try std.testing.expectEqual(@as(u8, 7), s.getMonth());
+    try std.testing.expectEqual(@as(u8, 14), s.getDay());
+}
