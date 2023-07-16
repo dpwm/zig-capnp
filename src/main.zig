@@ -31,7 +31,7 @@ const StructReader = struct {
         const byteSize = @bitSizeOf(T) >> 3;
         const byteOffset = offset * byteSize;
         const offsetBytes: u32 = 8 * self.offsetWords + byteOffset;
-        return std.mem.readIntNative(T, self.segments[self.segment][offsetBytes..][0..byteSize]);
+        return std.mem.readIntLittle(T, self.segments[self.segment][offsetBytes..][0..byteSize]);
     }
 };
 
@@ -62,13 +62,13 @@ test "basic data manipulation" {
 
     try testing.expectEqual(@as(usize, 24), n);
 
-    const nsegs = std.mem.readIntNative(u32, buf[0..4]);
+    const nsegs = std.mem.readIntLittle(u32, buf[0..4]);
     _ = nsegs;
-    const seg0 = std.mem.readIntNative(u32, buf[4..8]);
+    const seg0 = std.mem.readIntLittle(u32, buf[4..8]);
     _ = seg0;
     // std.debug.print("\nnsegs: {}, seg0: {}\n", .{ nsegs, seg0 });
 
-    const ptr = std.mem.readIntNative(u64, buf[8..16]);
+    const ptr = std.mem.readIntLittle(u64, buf[8..16]);
 
     const a = readPackedBits(ptr, 0, u2);
     try testing.expectEqual(@as(u2, 0), a);
@@ -82,7 +82,7 @@ test "basic data manipulation" {
     const d = readPackedBits(ptr, 48, u16);
     try testing.expectEqual(@as(u16, 0), d);
 
-    const data = std.mem.readIntNative(u64, buf[16..24]);
+    const data = std.mem.readIntLittle(u64, buf[16..24]);
     const year = readPackedBits(data, 0, i16);
     const month = readPackedBits(data, 16, u8);
     const day = readPackedBits(data, 24, u8);
@@ -102,7 +102,7 @@ const Message = struct {
 
         std.debug.assert(4 == try file.read(buffer[0..4]));
 
-        const segmentCount = 1 + std.mem.readIntNative(u32, buffer[0..4]);
+        const segmentCount = 1 + std.mem.readIntLittle(u32, buffer[0..4]);
 
         // std.debug.print("segmentCount = {}\n", .{segmentCount});
 
@@ -113,7 +113,7 @@ const Message = struct {
         const segments = try allocator.alloc([]u8, segmentCount * ELEMENTS);
 
         for (0..segmentCount) |i| {
-            const segmentWords = std.mem.readIntNative(u32, segmentLengthsBuffer[i * 4 ..][0..4]);
+            const segmentWords = std.mem.readIntLittle(u32, segmentLengthsBuffer[i * 4 ..][0..4]);
             segments[i] = try allocator.alloc(u8, segmentWords * 8 * BYTES);
             std.debug.assert(segments[i].len == try file.read(segments[i]));
         }
@@ -131,7 +131,7 @@ const Message = struct {
     }
 
     pub fn getRootStruct(self: *Message, comptime T: type) T.Reader {
-        const ptr = std.mem.readIntNative(u64, self.segments[0][0..8]);
+        const ptr = std.mem.readIntLittle(u64, self.segments[0][0..8]);
 
         const a = readPackedBits(ptr, 0, u2);
         const b = readPackedBits(ptr, 0, i30);
