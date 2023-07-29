@@ -33,6 +33,20 @@ const StructReader = struct {
         const offsetBytes: u32 = 8 * self.offsetWords + byteOffset;
         return std.mem.readIntLittle(T, self.segments[self.segment][offsetBytes..][0..byteSize]);
     }
+
+    pub fn print(self: StructReader) void {
+        std.debug.print("{{ segment={}, offsetWords={}, dataWords={}, ptrWords={} }}\n", .{ self.segment, self.offsetWords, self.dataWords, self.ptrWords });
+    }
+
+    pub fn readListField(self: StructReader, comptime T: type, ptrNo: u16) ListReader(T) {
+        std.debug.assert(ptrNo < self.ptrWords);
+        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
+
+        // TODO This **must** be boundschecked. But for now…
+        return ListReader(T).fromPointer(self.segments, self.segment, offsetWords);
+    }
+
+    pub fn readCompositeListField() void {}
 };
 
 const Date = struct {
@@ -49,6 +63,77 @@ const Date = struct {
 
         pub fn getDay(self: Reader) u8 {
             return self.reader.readIntField(u8, 3);
+        }
+    };
+};
+
+fn ListReader(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        segments: [][]u8,
+        segment: u32,
+        offsetWords: u29,
+
+        elementSize: u3,
+        length: u29,
+
+        pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) Self {
+            // for now, ignore the possibility that this may be a far pointer.
+            const ptr = std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+
+            const a = readPackedBits(ptr, 0, u2);
+            const b = readPackedBits(ptr, 2, i30);
+            const c = readPackedBits(ptr, 32, u3);
+            const d = readPackedBits(ptr, 35, u29);
+
+            const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + b);
+            //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
+
+            std.debug.assert(a == 1);
+
+            switch (@sizeOf(T)) {
+                1 => {
+                    std.debug.assert(c == 2);
+                },
+                2 => {
+                    std.debug.assert(c == 3);
+                },
+                4 => {
+                    std.debug.assert(c == 4);
+                },
+                8 => {
+                    std.debug.assert(c == 5);
+                },
+                else => {},
+            }
+
+            return Self{
+                .segments = segments,
+                .segment = segment,
+                .offsetWords = startOffsetWords,
+
+                .elementSize = c,
+                .length = d,
+            };
+        }
+        pub fn get(self: Self, ix: u32) T {
+            std.debug.assert(ix < self.length);
+            const byteSize = @sizeOf(T);
+            const byteOffset: u32 = 8 * self.offsetWords + ix * byteSize;
+
+            const buf = self.segments[self.segment][byteOffset..][0..byteSize];
+            return std.mem.readIntLittle(T, buf);
+        }
+    };
+}
+
+const Lists = struct {
+    const Reader = struct {
+        reader: StructReader,
+
+        pub fn getU8(self: Reader) ListReader(u8) {
+            return self.reader.readListField(u8, 0);
         }
     };
 };
@@ -134,7 +219,7 @@ const Message = struct {
         const ptr = std.mem.readIntLittle(u64, self.segments[0][0..8]);
 
         const a = readPackedBits(ptr, 0, u2);
-        const b = readPackedBits(ptr, 0, i30);
+        const b = readPackedBits(ptr, 2, i30);
         const c = readPackedBits(ptr, 32, u16);
         const d = readPackedBits(ptr, 48, u16);
 
@@ -168,4 +253,20 @@ test "simple struct unpacking (negative year)" {
     try std.testing.expectEqual(@as(i16, -2023), s.getYear());
     try std.testing.expectEqual(@as(u8, 7), s.getMonth());
     try std.testing.expectEqual(@as(u8, 14), s.getDay());
+}
+
+test "struct of lists" {
+    var file = try std.fs.cwd().openFile("capnp-tests/02_simple_lists.bin", .{});
+    defer file.close();
+
+    var message = try Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    const s = message.getRootStruct(Lists);
+
+    const xs = s.getU8();
+    for (0..xs.length) |i| {
+        const j: u32 = @intCast(i);
+        try std.testing.expectEqual(j, xs.get(j));
+    }
 }
