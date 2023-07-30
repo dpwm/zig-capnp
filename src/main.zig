@@ -46,7 +46,13 @@ const StructReader = struct {
         return ListReader(T).fromPointer(self.segments, self.segment, offsetWords);
     }
 
-    pub fn readCompositeListField() void {}
+    pub fn readCompositeListField(self: StructReader, comptime T: type, ptrNo: u16) CompositeListReader(T) {
+        std.debug.assert(ptrNo < self.ptrWords);
+        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
+
+        // TODO This **must** be boundschecked. But for now…
+        return CompositeListReader(T).fromPointer(self.segments, self.segment, offsetWords);
+    }
 };
 
 const Date = struct {
@@ -92,20 +98,10 @@ fn ListReader(comptime T: type) type {
 
             std.debug.assert(a == 1);
 
-            switch (@sizeOf(T)) {
-                1 => {
-                    std.debug.assert(c == 2);
-                },
-                2 => {
-                    std.debug.assert(c == 3);
-                },
-                4 => {
-                    std.debug.assert(c == 4);
-                },
-                8 => {
-                    std.debug.assert(c == 5);
-                },
-                else => {},
+            const typeName = @typeName(T);
+
+            if (std.mem.eql(u8, typeName, "u8")) {
+                std.debug.assert(c == 2);
             }
 
             return Self{
@@ -128,12 +124,108 @@ fn ListReader(comptime T: type) type {
     };
 }
 
+fn ListIterator(comptime T: type, comptime U: type) type {
+    return struct {
+        const Self = @This();
+        reader: T,
+        ix: u29 = 0,
+
+        pub fn next(self: *Self) ?U {
+            if (self.ix < self.reader.length) {
+                const out = self.reader.get(self.ix);
+                self.ix+=1;
+                return out;
+            } else {
+                return null;
+            }
+        }
+    };
+}
+
+fn CompositeListReader(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        segments: [][]u8,
+        segment: u32,
+        offsetWords: u29,
+
+        elementSize: u3,
+        length: u29,
+
+        dataWords: u16,
+        ptrWords: u16,
+
+        pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) Self {
+            // for now, ignore the possibility that this may be a far pointer.
+            const ptr = std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+
+            const a = readPackedBits(ptr, 0, u2);
+            const b = readPackedBits(ptr, 2, i30);
+            const c = readPackedBits(ptr, 32, u3);
+            const d = readPackedBits(ptr, 35, u29);
+            _ = d;
+
+            const headerOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + b);
+
+
+            const ptr2 = std.mem.readIntLittle(u64, segments[segment][headerOffsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+
+            const a2 = readPackedBits(ptr2, 0, u2);
+            std.debug.assert(a2 == 0);
+            const b2 = readPackedBits(ptr2, 2, i30);
+            const c2 = readPackedBits(ptr2, 32, u16);
+            const d2 = readPackedBits(ptr2, 48, u16);
+
+
+            std.debug.assert(a == 1);
+
+            return Self{
+                .segments = segments,
+                .segment = segment,
+                .offsetWords = headerOffsetWords + 1,
+
+                .elementSize = c,
+                .length = @intCast(b2),
+
+                .dataWords = c2,
+                .ptrWords = d2,
+            };
+        }
+
+        pub fn iter(self: Self) ListIterator(Self, T.Reader) {
+            return ListIterator(Self, T.Reader) {
+                .reader = self,
+                .ix = 0,
+            };
+        }
+
+        pub fn get(self: Self, ix: u32) T.Reader {
+            std.debug.assert(ix < self.length);
+            const wordSize = self.ptrWords + self.dataWords;
+            const offsetWords: u29 = @intCast(self.offsetWords + ix * wordSize);
+
+            return T.Reader {.reader = StructReader {.segments = self.segments, .segment = self.segment, .offsetWords = offsetWords, .dataWords=self.dataWords, .ptrWords = self.ptrWords,},};
+        }
+    };
+}
+
 const Lists = struct {
     const Reader = struct {
         reader: StructReader,
 
         pub fn getU8(self: Reader) ListReader(u8) {
             return self.reader.readListField(u8, 0);
+        }
+    };
+};
+
+const CompositeLists = struct {
+    const Reader = struct {
+        reader: StructReader,
+
+        pub fn getDates(self: Reader) CompositeListReader(Date) {
+            return self.reader.readCompositeListField(Date, 0);
         }
     };
 };
@@ -268,5 +360,21 @@ test "struct of lists" {
     for (0..xs.length) |i| {
         const j: u32 = @intCast(i);
         try std.testing.expectEqual(j, xs.get(j));
+    }
+}
+
+test "struct of composite list" {
+    var file = try std.fs.cwd().openFile("capnp-tests/03_composite_lists.bin", .{});
+    defer file.close();
+
+    var message = try Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    const s = message.getRootStruct(CompositeLists);
+
+    var it = s.getDates().iter();
+
+    while (it.next()) |x| {
+        std.debug.print("year={}\n", .{x.getYear()});
     }
 }
