@@ -434,3 +434,28 @@ test "struct with union" {
         std.debug.print("{}\n", .{x.which()});
     }
 }
+
+const Defaults = struct {
+    const Reader = struct {
+        reader: StructReader,
+
+        pub fn getInt32(self: Reader) i32 {
+            return 17 ^ self.reader.readIntField(i32, 0);
+        }
+    };
+};
+
+test "default values" {
+    var file = try std.fs.cwd().openFile("capnp-tests/05_default_values.bin", .{});
+    defer file.close();
+
+    var message = try Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    const s = message.getRootStruct(Defaults);
+    try std.testing.expectEqual(
+        @as(i32, 17),
+        s.getInt32(),
+    );
+    // TODO: default for pointers. This is easier than it seems!
+}
