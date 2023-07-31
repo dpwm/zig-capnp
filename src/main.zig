@@ -1,10 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
 
-export fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
-
 fn readPackedBits(data: u64, comptime lsb_offset: u6, comptime T: type) T {
     const len = @bitSizeOf(T);
     const UT: type = @Type(.{
@@ -20,7 +16,7 @@ const BITS: usize = 1;
 const WORDS: usize = 1;
 const BYTES: usize = 1;
 
-const StructReader = struct {
+pub const StructReader = struct {
     segments: [][]u8,
     segment: u32,
     offsetWords: u29,
@@ -142,7 +138,7 @@ fn ListIterator(comptime T: type, comptime U: type) type {
     };
 }
 
-fn CompositeListReader(comptime T: type) type {
+pub fn CompositeListReader(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -273,11 +269,9 @@ test "basic data manipulation" {
     try testing.expectEqual(@as(i16, 2023), year);
     try testing.expectEqual(@as(u8, 7), month);
     try testing.expectEqual(@as(u8, 14), day);
-
-    try testing.expect(add(3, 7) == 10);
 }
 
-const Message = struct {
+pub const Message = struct {
     segments: [][]u8 = undefined,
 
     pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Message {
