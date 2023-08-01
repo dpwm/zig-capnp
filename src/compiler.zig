@@ -3,6 +3,19 @@ const main = @import("main.zig");
 const Allocator = std.mem.Allocator;
 
 pub const Node = struct {
+    pub const NestedNode = struct {
+        pub const Reader = struct {
+            reader: main.StructReader,
+
+            pub fn getId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 0);
+            }
+
+            pub fn getName(self: @This()) []u8 {
+                return self.reader.readStringField(0);
+            }
+        };
+    };
     pub const Reader = struct {
         reader: main.StructReader,
 
@@ -12,6 +25,10 @@ pub const Node = struct {
 
         pub fn getDisplayName(self: Reader) []u8 {
             return self.reader.readStringField(0);
+        }
+
+        pub fn getNestedNodes(self: @This()) main.CompositeListReader(Node.NestedNode) {
+            return self.reader.readCompositeListField(Node.NestedNode, 1);
         }
     };
 };
@@ -46,6 +63,17 @@ pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, Node.Reader), cgr: Cod
     }
 }
 
+pub fn print_node(hashMap: std.AutoHashMap(u64, Node.Reader), node: Node.Reader, depth: u32) void {
+    var it = node.getNestedNodes().iter();
+    while (it.next()) |n| {
+        for (0..depth) |_| {
+            std.debug.print("  ", .{});
+        }
+        std.debug.print("{s}\n", .{n.getName()});
+        print_node(hashMap, hashMap.get(n.getId()).?, depth + 1);
+    }
+}
+
 test "test1" {
     var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
     defer file.close();
@@ -63,5 +91,6 @@ test "test1" {
     while (it.next()) |requestedFile| {
         const node = hashMap.get(requestedFile.getId()).?;
         std.debug.print("{s}\n", .{node.getDisplayName()});
+        print_node(hashMap, node, 1);
     }
 }
