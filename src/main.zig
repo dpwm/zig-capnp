@@ -49,6 +49,14 @@ pub const StructReader = struct {
         // TODO This **must** be boundschecked. But for now…
         return CompositeListReader(T).fromPointer(self.segments, self.segment, offsetWords);
     }
+
+    pub fn readStringField(self: StructReader, ptrNo: u16) []u8 {
+        std.debug.assert(ptrNo < self.ptrWords);
+        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
+
+        const listReader = ListReader(u8).fromPointer(self.segments, self.segment, offsetWords);
+        return listReader.getString();
+    }
 };
 
 const Date = struct {
@@ -116,6 +124,10 @@ fn ListReader(comptime T: type) type {
 
             const buf = self.segments[self.segment][byteOffset..][0..byteSize];
             return std.mem.readIntLittle(T, buf);
+        }
+        pub fn getString(self: Self) []u8 {
+            comptime std.debug.assert(T == u8);
+            return self.segments[self.segment][8 * self.offsetWords ..][0 .. self.length - 1];
         }
     };
 }
