@@ -13,12 +13,13 @@ pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), c
 
 pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) void {
     var it = node.getNestedNodes().iter();
-    while (it.next()) |n| {
+    while (it.next()) |nestedNode| {
         for (0..depth) |_| {
             std.debug.print("  ", .{});
         }
-        std.debug.print("{s}\n", .{n.getName()});
-        print_node(hashMap, hashMap.get(n.getId()).?, depth + 1);
+        const node_ = hashMap.get(nestedNode.getId()).?;
+        std.debug.print("{s}: {}\n", .{nestedNode.getName(), node_.which()});
+        print_node(hashMap, node_, depth + 1);
     }
 }
 
