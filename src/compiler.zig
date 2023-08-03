@@ -10,21 +10,26 @@ pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), c
     }
 }
 
+pub fn indent(depth: usize) void {
+    for (0..depth) |_| {
+        std.debug.print("  ", .{});
+    }
+}
+
 pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) void {
     var it = node.getNestedNodes().iter();
     while (it.next()) |nestedNode| {
-        for (0..depth) |_| {
-            std.debug.print("  ", .{});
-        }
         const node_ = hashMap.get(nestedNode.getId()).?;
         const w = node.which();
 
+        indent(depth);
         std.debug.print("{s}\n", .{nestedNode.getName()});
 
         switch (w) {
             .struct_ => |x| {
                 var fieldsIterator = x.getFields().iter();
                 while (fieldsIterator.next()) |f| {
+                    indent(depth);
                     std.debug.print("- {s}\n", .{f.getName()});
                 }
             },
