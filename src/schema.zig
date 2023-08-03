@@ -1,9 +1,30 @@
 const capnp = @import("capnp.zig");
 
+pub const Field = struct {
+    pub const Reader = struct {
+        reader: capnp.StructReader,
+
+        pub fn getName(self: @This()) []u8 {
+            return self.reader.readStringField(0);
+        }
+    };
+};
 pub const Node = struct {
     pub const _Tag = union(enum) {
-        file,
-        struct_,
+        const FileReader = struct {
+            reader: capnp.StructReader,
+        };
+
+        const StructReader = struct {
+            reader: capnp.StructReader,
+
+            pub fn getFields(self: @This()) capnp.CompositeListReader(Field) {
+                return self.reader.readCompositeListField(Field, 3);
+            }
+        };
+
+        file: FileReader,
+        struct_: StructReader,
         enum_,
         const_,
         interface,
@@ -31,10 +52,10 @@ pub const Node = struct {
             const n = self.reader.readIntField(u16, 6);
             switch (n) {
                 0 => {
-                    return _Tag.file;
+                    return _Tag{ .file = _Tag.FileReader{ .reader = self.reader } };
                 },
                 1 => {
-                    return _Tag.struct_;
+                    return _Tag{ .struct_ = _Tag.StructReader{ .reader = self.reader } };
                 },
                 2 => {
                     return _Tag.enum_;

@@ -3,7 +3,6 @@ const capnp = @import("capnp.zig");
 const schema = @import("schema.zig");
 const Allocator = std.mem.Allocator;
 
-
 pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), cgr: schema.CodeGeneratorRequest.Reader) Allocator.Error!void {
     var iter = cgr.getNodes().iter();
     while (iter.next()) |node| {
@@ -18,11 +17,23 @@ pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schem
             std.debug.print("  ", .{});
         }
         const node_ = hashMap.get(nestedNode.getId()).?;
-        std.debug.print("{s}: {}\n", .{nestedNode.getName(), node_.which()});
+        const w = node.which();
+
+        std.debug.print("{s}\n", .{nestedNode.getName()});
+
+        switch (w) {
+            .struct_ => |x| {
+                var fieldsIterator = x.getFields().iter();
+                while (fieldsIterator.next()) |f| {
+                    std.debug.print("- {s}\n", .{f.getName()});
+                }
+            },
+            else => {},
+        }
+
         print_node(hashMap, node_, depth + 1);
     }
 }
-
 
 test "test1" {
     var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
