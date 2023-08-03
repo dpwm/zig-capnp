@@ -1,8 +1,34 @@
 const capnp = @import("capnp.zig");
 
 pub const Field = struct {
+    const Tag = union(enum) {
+        const Slot = struct {
+            reader: capnp.StructReader,
+        };
+        const Group = struct {
+            reader: capnp.StructReader,
+        };
+
+        slot: Slot,
+        group: Group,
+        _other: u16,
+    };
     pub const Reader = struct {
         reader: capnp.StructReader,
+
+        pub fn which(self: @This()) Field.Tag {
+            switch (self.reader.readIntField(u16, 4)) {
+                0 => {
+                    return Field.Tag{ .slot = .{ .reader = self.reader } };
+                },
+                1 => {
+                    return Field.Tag{ .group = .{ .reader = self.reader } };
+                },
+                else => |n| {
+                    return Field.Tag{ ._other = n };
+                },
+            }
+        }
 
         pub fn getName(self: @This()) []u8 {
             return self.reader.readStringField(0);
@@ -11,11 +37,11 @@ pub const Field = struct {
 };
 pub const Node = struct {
     pub const _Tag = union(enum) {
-        const FileReader = struct {
+        const File = struct {
             reader: capnp.StructReader,
         };
 
-        const StructReader = struct {
+        const Struct = struct {
             reader: capnp.StructReader,
 
             pub fn getFields(self: @This()) capnp.CompositeListReader(Field) {
@@ -23,8 +49,8 @@ pub const Node = struct {
             }
         };
 
-        file: FileReader,
-        struct_: StructReader,
+        file: @This().File,
+        struct_: @This().Struct,
         enum_,
         const_,
         interface,
@@ -48,14 +74,14 @@ pub const Node = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn which(self: Reader) _Tag {
+        pub fn which(self: @This()) _Tag {
             const n = self.reader.readIntField(u16, 6);
             switch (n) {
                 0 => {
-                    return _Tag{ .file = _Tag.FileReader{ .reader = self.reader } };
+                    return _Tag{ .file = .{ .reader = self.reader } };
                 },
                 1 => {
-                    return _Tag{ .struct_ = _Tag.StructReader{ .reader = self.reader } };
+                    return _Tag{ .struct_ = .{ .reader = self.reader } };
                 },
                 2 => {
                     return _Tag.enum_;

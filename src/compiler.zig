@@ -30,7 +30,7 @@ pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schem
                 var fieldsIterator = x.getFields().iter();
                 while (fieldsIterator.next()) |f| {
                     indent(depth);
-                    std.debug.print("- {s}\n", .{f.getName()});
+                    std.debug.print("- {s}: {}\n", .{ f.getName(), f.which() });
                 }
             },
             else => {},
