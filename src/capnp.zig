@@ -11,6 +11,50 @@ pub fn readPackedBits(data: u64, comptime lsb_offset: u6, comptime T: type) T {
     return @bitCast(@as(UT, @truncate(x)));
 }
 
+pub const Ptr = union(enum) {
+    const Struct = packed struct(u64) {
+        type: u2,
+        offset: i30,
+        dataWords: u16,
+        ptrWords: u16,
+    };
+    const List = packed struct(u64) {
+        type: u2,
+        offsetWords: i30,
+        size: u3,
+        elementsOrWords: u29,
+    };
+    const InterSegment = packed struct(u64) {
+        type: u2,
+        double: bool,
+        offset: u29,
+        segment: u32,
+    };
+    const Capability = packed struct(u64) {
+        type: u2,
+        _: u30,
+        index: u32,
+    };
+    const Type = packed struct(u64) {
+        type: u2,
+        _: u62,
+    };
+
+    struct_: Struct,
+    list: List,
+    inter_segment: InterSegment,
+    capability: Capability,
+
+    pub fn of_u64(ptr: u64) Ptr {
+        return switch (@as(Ptr.Type, @bitCast(ptr)).type) {
+            0 => Ptr{ .struct_ = @bitCast(ptr) },
+            1 => Ptr{ .list = @bitCast(ptr) },
+            2 => Ptr{ .inter_segment = @bitCast(ptr) },
+            3 => Ptr{ .capability = @bitCast(ptr) },
+        };
+    }
+};
+
 const ELEMENTS: usize = 1;
 const BITS: usize = 1;
 const WORDS: usize = 1;
@@ -57,8 +101,25 @@ pub const StructReader = struct {
         const listReader = ListReader(u8).fromPointer(self.segments, self.segment, offsetWords);
         return listReader.getString();
     }
-};
 
+    pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) StructReader {
+        // for now, ignore the possibility that this may be a far pointer.
+        const data = segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES];
+        const ptr = Ptr.of_u64(std.mem.readIntLittle(u64, data));
+        const struct_ = ptr.struct_;
+
+        const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + struct_.offset);
+        //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
+
+        return StructReader{
+            .segments = segments,
+            .segment = segment,
+            .offsetWords = startOffsetWords,
+            .dataWords = struct_.dataWords,
+            .ptrWords = struct_.ptrWords,
+        };
+    }
+};
 
 pub fn ListReader(comptime T: type) type {
     return struct {
@@ -73,22 +134,16 @@ pub fn ListReader(comptime T: type) type {
 
         pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) Self {
             // for now, ignore the possibility that this may be a far pointer.
-            const ptr = std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+            const ptr = Ptr.of_u64(std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]));
+            const list = ptr.list;
 
-            const a = readPackedBits(ptr, 0, u2);
-            const b = readPackedBits(ptr, 2, i30);
-            const c = readPackedBits(ptr, 32, u3);
-            const d = readPackedBits(ptr, 35, u29);
-
-            const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + b);
+            const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + list.offsetWords);
             //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
-
-            std.debug.assert(a == 1);
 
             const typeName = @typeName(T);
 
             if (std.mem.eql(u8, typeName, "u8")) {
-                std.debug.assert(c == 2);
+                std.debug.assert(list.size == 2);
             }
 
             return Self{
@@ -96,8 +151,8 @@ pub fn ListReader(comptime T: type) type {
                 .segment = segment,
                 .offsetWords = startOffsetWords,
 
-                .elementSize = c,
-                .length = d,
+                .elementSize = list.size,
+                .length = list.elementsOrWords,
             };
         }
         pub fn get(self: Self, ix: u32) T {
@@ -207,7 +262,6 @@ pub fn CompositeListReader(comptime T: type) type {
     };
 }
 
-
 pub const Message = struct {
     segments: [][]u8 = undefined,
 
@@ -245,15 +299,6 @@ pub const Message = struct {
     }
 
     pub fn getRootStruct(self: *Message, comptime T: type) T.Reader {
-        const ptr = std.mem.readIntLittle(u64, self.segments[0][0..8]);
-
-        const a = readPackedBits(ptr, 0, u2);
-        const b = readPackedBits(ptr, 2, i30);
-        const c = readPackedBits(ptr, 32, u16);
-        const d = readPackedBits(ptr, 48, u16);
-
-        std.debug.assert(a == 0);
-
-        return T.Reader{ .reader = StructReader{ .segments = self.segments, .segment = 0, .offsetWords = @intCast(b + 1), .dataWords = c, .ptrWords = d ,}, };
+        return .{ .reader = StructReader.fromPointer(self.segments, 0, 0) };
     }
 };

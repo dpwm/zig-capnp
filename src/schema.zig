@@ -4,9 +4,15 @@ pub const Field = struct {
     const Tag = union(enum) {
         const Slot = struct {
             reader: capnp.StructReader,
+
+            pub fn getType() capnp.StructReader {}
         };
         const Group = struct {
             reader: capnp.StructReader,
+
+            pub fn getId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 0);
+            }
         };
 
         slot: Slot,
