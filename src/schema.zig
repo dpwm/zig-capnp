@@ -36,7 +36,7 @@ pub const Field = struct {
             }
         }
 
-        pub fn getName(self: @This()) []u8 {
+        pub fn getName(self: @This()) ![]u8 {
             return self.reader.readStringField(0);
         }
     };
@@ -50,8 +50,8 @@ pub const Node = struct {
         const Struct = struct {
             reader: capnp.StructReader,
 
-            pub fn getFields(self: @This()) capnp.CompositeListReader(Field) {
-                return self.reader.readCompositeListField(Field, 3);
+            pub fn getFields(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(Field) {
+                return self.reader.readPtrField(capnp.CompositeListReader(Field), 3);
             }
         };
 
@@ -72,7 +72,7 @@ pub const Node = struct {
                 return self.reader.readIntField(u64, 0);
             }
 
-            pub fn getName(self: @This()) []u8 {
+            pub fn getName(self: @This()) ![]u8 {
                 return self.reader.readStringField(0);
             }
         };
@@ -111,12 +111,12 @@ pub const Node = struct {
             return self.reader.readIntField(u64, 0);
         }
 
-        pub fn getDisplayName(self: Reader) []u8 {
+        pub fn getDisplayName(self: Reader) capnp.Counter.Error![]u8 {
             return self.reader.readStringField(0);
         }
 
-        pub fn getNestedNodes(self: @This()) capnp.CompositeListReader(Node.NestedNode) {
-            return self.reader.readCompositeListField(Node.NestedNode, 1);
+        pub fn getNestedNodes(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(Node.NestedNode) {
+            return self.reader.readPtrField(capnp.CompositeListReader(Node.NestedNode), 1);
         }
     };
 };
@@ -134,12 +134,12 @@ pub const CodeGeneratorRequest = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn getNodes(self: @This()) capnp.CompositeListReader(Node) {
-            return self.reader.readCompositeListField(Node, 0);
+        pub fn getNodes(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(Node) {
+            return self.reader.readPtrField(capnp.CompositeListReader(Node), 0);
         }
 
-        pub fn getRequestedFiles(self: @This()) capnp.CompositeListReader(CodeGeneratorRequest.RequestedFile) {
-            return self.reader.readCompositeListField(CodeGeneratorRequest.RequestedFile, 1);
+        pub fn getRequestedFiles(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(CodeGeneratorRequest.RequestedFile) {
+            return self.reader.readPtrField(capnp.CompositeListReader(CodeGeneratorRequest.RequestedFile), 1);
         }
     };
 };

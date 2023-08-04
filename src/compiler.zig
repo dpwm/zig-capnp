@@ -3,8 +3,8 @@ const capnp = @import("capnp.zig");
 const schema = @import("schema.zig");
 const Allocator = std.mem.Allocator;
 
-pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), cgr: schema.CodeGeneratorRequest.Reader) Allocator.Error!void {
-    var iter = cgr.getNodes().iter();
+pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), cgr: schema.CodeGeneratorRequest.Reader) !void {
+    var iter = (try cgr.getNodes()).iter();
     while (iter.next()) |node| {
         try hashMap.put(node.getId(), node);
     }
@@ -16,27 +16,27 @@ pub fn indent(depth: usize) void {
     }
 }
 
-pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) void {
-    var it = node.getNestedNodes().iter();
+pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) !void {
+    var it = (try node.getNestedNodes()).iter();
     while (it.next()) |nestedNode| {
         const node_ = hashMap.get(nestedNode.getId()).?;
         const w = node.which();
 
         indent(depth);
-        std.debug.print("{s}\n", .{nestedNode.getName()});
+        std.debug.print("{s}\n", .{try nestedNode.getName()});
 
         switch (w) {
             .struct_ => |x| {
-                var fieldsIterator = x.getFields().iter();
+                var fieldsIterator = (try x.getFields()).iter();
                 while (fieldsIterator.next()) |f| {
                     indent(depth);
-                    std.debug.print("- {s}: {}\n", .{ f.getName(), f.which() });
+                    std.debug.print("- {s}\n", .{try f.getName()});
                 }
             },
             else => {},
         }
 
-        print_node(hashMap, node_, depth + 1);
+        try print_node(hashMap, node_, depth + 1);
     }
 }
 
@@ -47,16 +47,18 @@ test "test1" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    const s = message.getRootStruct(schema.CodeGeneratorRequest);
+    const s = try message.getRootStruct(schema.CodeGeneratorRequest);
     var hashMap = std.AutoHashMap(u64, schema.Node.Reader).init(std.testing.allocator);
     defer hashMap.deinit();
 
     try populateLookupTable(&hashMap, s);
+    std.debug.print("s={}\n", .{s});
 
-    var it = s.getRequestedFiles().iter();
+    var it = (try s.getRequestedFiles()).iter();
     while (it.next()) |requestedFile| {
+        std.debug.print("id={}\n", .{requestedFile.getId()});
         const node = hashMap.get(requestedFile.getId()).?;
-        std.debug.print("{s}\n", .{node.getDisplayName()});
-        print_node(hashMap, node, 1);
+        std.debug.print("{s}\n", .{try node.getDisplayName()});
+        try print_node(hashMap, node, 1);
     }
 }

@@ -73,11 +73,6 @@ pub const Counter = struct {
 };
 
 pub const ReadContext = struct {
-    pub const Counters = struct {
-        traversal: Counter = Counter{ .limit = 8 * 1024 * 1024 },
-        depth: Counter = Counter{ .limit = 64 },
-    };
-
     const Error = error{
         OutOfBounds,
     };
@@ -86,7 +81,8 @@ pub const ReadContext = struct {
     segment: u32,
     offsetWords: u29,
 
-    counters: *Counters,
+    depth_counter: Counter = Counter{ .limit = 64 },
+    traversal_counter: *Counter,
 
     pub fn offsetBytes(self: ReadContext) u32 {
         // Zig’s slices do bounds checking for us.
@@ -115,18 +111,18 @@ pub const ReadContext = struct {
         const ptr = self.readPtrN();
         switch (ptr) {
             .struct_ => |x| {
-                try self.counters.depth.increment(1);
-                try self.counters.traversal.increment(x.dataWords + x.ptrWords);
+                try self.depth_counter.increment(1);
+                try self.traversal_counter.increment(x.dataWords + x.ptrWords);
                 self.relativeWords(1 + x.offsetWords);
             },
             .list => |x| {
-                try self.counters.depth.increment(1);
+                try self.depth_counter.increment(1);
                 // TODO: work out size of a list for traversal
                 // try self.counters.traversal.increment();
                 self.relativeWords(1 + x.offsetWords);
             },
             .inter_segment => |x| {
-                try self.counters.depth.increment(1);
+                try self.depth_counter.increment(1);
                 if (x.double) {
                     unreachable;
                 } else {
@@ -140,12 +136,16 @@ pub const ReadContext = struct {
         return ptr;
     }
 
-    pub fn fromSegments(segments: [][]u8, counters: *Counters) ReadContext {
+    pub fn readString(self: ReadContext, length: u32) []u8 {
+        return self.segments[self.segment][self.offsetBytes()..][0 .. length - 1];
+    }
+
+    pub fn fromSegments(segments: [][]u8, traversal_counter: *Counter) ReadContext {
         return ReadContext{
             .segments = segments,
             .segment = 0,
             .offsetWords = 0,
-            .counters = counters,
+            .traversal_counter = traversal_counter,
         };
     }
 };
@@ -175,8 +175,8 @@ pub const StructReader = struct {
         }
     }
 
-    pub fn readStringField(self: StructReader, ptrNo: u16) []u8 {
-        return self.readPtrField(ListReader(u8), ptrNo).getString();
+    pub fn readStringField(self: StructReader, ptrNo: u16) Counter.Error![]u8 {
+        return (try self.readPtrField(ListReader(u8), ptrNo)).getString();
     }
 
     pub fn fromReadContext(context: ReadContext) Counter.Error!StructReader {
@@ -222,7 +222,7 @@ pub fn ListReader(comptime T: type) type {
         }
         pub fn getString(self: Self) []u8 {
             comptime std.debug.assert(T == u8);
-            return self.segments[self.segment][8 * self.offsetWords ..][0 .. self.length - 1];
+            return self.context.readString(self.length);
         }
     };
 }
@@ -306,7 +306,7 @@ pub fn CompositeListReader(comptime T: type) type {
 
 pub const Message = struct {
     segments: [][]u8 = undefined,
-    counters: ReadContext.Counters = ReadContext.Counters{},
+    traversal_counter: Counter = Counter{ .limit = 8 * 1024 * 1024 },
 
     pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Message {
         var buffer: [4]u8 = undefined;
@@ -342,6 +342,7 @@ pub const Message = struct {
     }
 
     pub fn getRootStruct(self: *Message, comptime T: type) Counter.Error!T.Reader {
-        return T.Reader{ .reader = try StructReader.fromReadContext(ReadContext.fromSegments(self.segments, &self.counters)) };
+        self.traversal_counter = Counter{ .limit = 8 * 1024 * 1024 };
+        return T.Reader{ .reader = try StructReader.fromReadContext(ReadContext.fromSegments(self.segments, &self.traversal_counter)) };
     }
 };
