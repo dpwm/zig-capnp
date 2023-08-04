@@ -55,6 +55,36 @@ pub const Ptr = union(enum) {
     }
 };
 
+pub const Counter = struct {
+    count: usize,
+    limit: usize,
+
+    const Error = error{
+        LimitExceeded,
+    };
+
+    pub fn increment(self: *Counter, x: usize) Error!void {
+        self.count += x;
+
+        if (self.count >= self.limit) {
+            return Error.LimitExceeded;
+        }
+    }
+};
+
+pub const ReadContext = struct {
+    pub const Counters = struct {
+        traversal: Counter,
+        depth: Counter,
+    };
+
+    segments: [][]u8,
+    segment: u32,
+    offsetWords: u29,
+
+    counters: *Counters,
+};
+
 const ELEMENTS: usize = 1;
 const BITS: usize = 1;
 const WORDS: usize = 1;
