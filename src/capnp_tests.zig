@@ -23,8 +23,8 @@ pub const Lists = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn getU8(self: Reader) capnp.ListReader(u8) {
-            return self.reader.readListField(u8, 0);
+        pub fn getU8(self: Reader) capnp.Counter.Error!capnp.ListReader(u8) {
+            return self.reader.readPtrField(capnp.ListReader(u8), 0);
         }
     };
 };
@@ -33,8 +33,8 @@ pub const CompositeLists = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn getDates(self: Reader) capnp.CompositeListReader(Date) {
-            return self.reader.readCompositeListField(Date, 0);
+        pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
+            return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
         }
     };
 };
@@ -84,7 +84,7 @@ test "simple struct unpacking" {
 
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
-    const s = message.getRootStruct(Date);
+    const s = try message.getRootStruct(Date);
 
     try std.testing.expectEqual(@as(i16, 2023), s.getYear());
     try std.testing.expectEqual(@as(u8, 7), s.getMonth());
@@ -97,7 +97,7 @@ test "simple struct unpacking (negative year)" {
 
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
-    const s = message.getRootStruct(Date);
+    const s = try message.getRootStruct(Date);
 
     try std.testing.expectEqual(@as(i16, -2023), s.getYear());
     try std.testing.expectEqual(@as(u8, 7), s.getMonth());
@@ -111,9 +111,9 @@ test "struct of lists" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    const s = message.getRootStruct(Lists);
+    const s = try message.getRootStruct(Lists);
 
-    const xs = s.getU8();
+    const xs = try s.getU8();
     for (0..xs.length) |i| {
         const j: u32 = @intCast(i);
         try std.testing.expectEqual(j, xs.get(j));
@@ -127,9 +127,9 @@ test "struct of composite list" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    const s = message.getRootStruct(CompositeLists);
+    const s = try message.getRootStruct(CompositeLists);
 
-    var it = s.getDates().iter();
+    var it = (try s.getDates()).iter();
 
     while (it.next()) |x| {
         std.debug.print("year={}\n", .{x.getYear()});
@@ -166,8 +166,8 @@ pub const ULists = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn getUnionTests(self: Reader) capnp.CompositeListReader(UnionTest) {
-            return self.reader.readCompositeListField(UnionTest, 0);
+        pub fn getUnionTests(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(UnionTest) {
+            return self.reader.readPtrField(capnp.CompositeListReader(UnionTest), 0);
         }
     };
 };
@@ -179,8 +179,8 @@ test "struct with union" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    const s = message.getRootStruct(ULists);
-    var it = s.getUnionTests().iter();
+    const s = try message.getRootStruct(ULists);
+    var it = (try s.getUnionTests()).iter();
     while (it.next()) |x| {
         std.debug.print("{}\n", .{x.which()});
     }
@@ -203,7 +203,7 @@ test "default values" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    const s = message.getRootStruct(Defaults);
+    const s = try message.getRootStruct(Defaults);
     try std.testing.expectEqual(
         @as(i32, 17),
         s.getInt32(),

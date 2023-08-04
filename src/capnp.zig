@@ -14,14 +14,14 @@ pub fn readPackedBits(data: u64, comptime lsb_offset: u6, comptime T: type) T {
 pub const Ptr = union(enum) {
     const Struct = packed struct(u64) {
         type: u2,
-        offset: i30,
+        offsetWords: i30,
         dataWords: u16,
         ptrWords: u16,
     };
     const List = packed struct(u64) {
         type: u2,
         offsetWords: i30,
-        size: u3,
+        elementSize: u3,
         elementsOrWords: u29,
     };
     const InterSegment = packed struct(u64) {
@@ -56,10 +56,10 @@ pub const Ptr = union(enum) {
 };
 
 pub const Counter = struct {
-    count: usize,
+    count: usize = 0,
     limit: usize,
 
-    const Error = error{
+    pub const Error = error{
         LimitExceeded,
     };
 
@@ -74,8 +74,12 @@ pub const Counter = struct {
 
 pub const ReadContext = struct {
     pub const Counters = struct {
-        traversal: Counter,
-        depth: Counter,
+        traversal: Counter = Counter{ .limit = 8 * 1024 * 1024 },
+        depth: Counter = Counter{ .limit = 64 },
+    };
+
+    const Error = error{
+        OutOfBounds,
     };
 
     segments: [][]u8,
@@ -83,6 +87,67 @@ pub const ReadContext = struct {
     offsetWords: u29,
 
     counters: *Counters,
+
+    pub fn offsetBytes(self: ReadContext) u32 {
+        // Zig’s slices do bounds checking for us.
+        return self.offsetWords * 8;
+    }
+
+    pub fn relativeWords(self: *ReadContext, dx: i30) void {
+        self.offsetWords = @intCast(dx + self.offsetWords);
+    }
+
+    pub fn readIntWithBound(self: ReadContext, comptime T: type, offset: u32, boundWords: u29) T {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return if (pos < boundWords << 3) std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]) else 0;
+    }
+
+    pub fn readInt(self: ReadContext, comptime T: type, offset: u32) T {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]);
+    }
+
+    pub fn readPtrN(self: ReadContext) Ptr {
+        return Ptr.of_u64(self.readInt(u64, 0));
+    }
+
+    pub fn readPtr(self: *ReadContext) Counter.Error!Ptr {
+        const ptr = self.readPtrN();
+        switch (ptr) {
+            .struct_ => |x| {
+                try self.counters.depth.increment(1);
+                try self.counters.traversal.increment(x.dataWords + x.ptrWords);
+                self.relativeWords(1 + x.offsetWords);
+            },
+            .list => |x| {
+                try self.counters.depth.increment(1);
+                // TODO: work out size of a list for traversal
+                // try self.counters.traversal.increment();
+                self.relativeWords(1 + x.offsetWords);
+            },
+            .inter_segment => |x| {
+                try self.counters.depth.increment(1);
+                if (x.double) {
+                    unreachable;
+                } else {
+                    // TODO: explicitly check segment bounds
+                    self.segment = x.segment;
+                    self.offsetWords = x.offset;
+                }
+            },
+            else => {},
+        }
+        return ptr;
+    }
+
+    pub fn fromSegments(segments: [][]u8, counters: *Counters) ReadContext {
+        return ReadContext{
+            .segments = segments,
+            .segment = 0,
+            .offsetWords = 0,
+            .counters = counters,
+        };
+    }
 };
 
 const ELEMENTS: usize = 1;
@@ -91,60 +156,35 @@ const WORDS: usize = 1;
 const BYTES: usize = 1;
 
 pub const StructReader = struct {
-    segments: [][]u8,
-    segment: u32,
-    offsetWords: u29,
+    context: ReadContext,
     dataWords: u16,
     ptrWords: u16,
 
     pub fn readIntField(self: StructReader, comptime T: type, offset: u32) T {
-        const byteSize = @bitSizeOf(T) >> 3;
-        const byteOffset = offset * byteSize;
-        const offsetBytes: u32 = 8 * self.offsetWords + byteOffset;
-        return std.mem.readIntLittle(T, self.segments[self.segment][offsetBytes..][0..byteSize]);
+        return self.context.readIntWithBound(T, offset, self.dataWords);
     }
 
-    pub fn print(self: StructReader) void {
-        std.debug.print("{{ segment={}, offsetWords={}, dataWords={}, ptrWords={} }}\n", .{ self.segment, self.offsetWords, self.dataWords, self.ptrWords });
-    }
-
-    pub fn readListField(self: StructReader, comptime T: type, ptrNo: u16) ListReader(T) {
-        std.debug.assert(ptrNo < self.ptrWords);
-        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
-
-        // TODO This **must** be boundschecked. But for now…
-        return ListReader(T).fromPointer(self.segments, self.segment, offsetWords);
-    }
-
-    pub fn readCompositeListField(self: StructReader, comptime T: type, ptrNo: u16) CompositeListReader(T) {
-        std.debug.assert(ptrNo < self.ptrWords);
-        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
-
-        // TODO This **must** be boundschecked. But for now…
-        return CompositeListReader(T).fromPointer(self.segments, self.segment, offsetWords);
+    pub fn readPtrField(self: StructReader, comptime T: type, ptrNo: u16) Counter.Error!T {
+        if (ptrNo < self.ptrWords) {
+            std.debug.assert(ptrNo < self.ptrWords);
+            var context = self.context;
+            context.relativeWords(self.dataWords + ptrNo);
+            return try T.fromReadContext(context);
+        } else {
+            unreachable;
+        }
     }
 
     pub fn readStringField(self: StructReader, ptrNo: u16) []u8 {
-        std.debug.assert(ptrNo < self.ptrWords);
-        const offsetWords = self.offsetWords + self.dataWords + ptrNo;
-
-        const listReader = ListReader(u8).fromPointer(self.segments, self.segment, offsetWords);
-        return listReader.getString();
+        return self.readPtrField(ListReader(u8), ptrNo).getString();
     }
 
-    pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) StructReader {
-        // for now, ignore the possibility that this may be a far pointer.
-        const data = segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES];
-        const ptr = Ptr.of_u64(std.mem.readIntLittle(u64, data));
-        const struct_ = ptr.struct_;
-
-        const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + struct_.offset);
-        //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
+    pub fn fromReadContext(context: ReadContext) Counter.Error!StructReader {
+        var _context = context;
+        const struct_ = (try _context.readPtr()).struct_;
 
         return StructReader{
-            .segments = segments,
-            .segment = segment,
-            .offsetWords = startOffsetWords,
+            .context = _context,
             .dataWords = struct_.dataWords,
             .ptrWords = struct_.ptrWords,
         };
@@ -155,43 +195,30 @@ pub fn ListReader(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        segments: [][]u8,
-        segment: u32,
-        offsetWords: u29,
+        context: ReadContext,
 
         elementSize: u3,
         length: u29,
 
-        pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) Self {
+        pub fn fromReadContext(context: ReadContext) Counter.Error!Self {
             // for now, ignore the possibility that this may be a far pointer.
-            const ptr = Ptr.of_u64(std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]));
-            const list = ptr.list;
+            var _context = context;
+            const list = (try _context.readPtr()).list;
 
-            const startOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + list.offsetWords);
             //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
 
-            const typeName = @typeName(T);
-
-            if (std.mem.eql(u8, typeName, "u8")) {
-                std.debug.assert(list.size == 2);
+            if (T == u8) {
+                std.debug.assert(list.elementSize == 2);
             }
 
             return Self{
-                .segments = segments,
-                .segment = segment,
-                .offsetWords = startOffsetWords,
-
-                .elementSize = list.size,
+                .context = _context,
+                .elementSize = list.elementSize,
                 .length = list.elementsOrWords,
             };
         }
         pub fn get(self: Self, ix: u32) T {
-            std.debug.assert(ix < self.length);
-            const byteSize = @sizeOf(T);
-            const byteOffset: u32 = 8 * self.offsetWords + ix * byteSize;
-
-            const buf = self.segments[self.segment][byteOffset..][0..byteSize];
-            return std.mem.readIntLittle(T, buf);
+            return self.context.readInt(T, ix);
         }
         pub fn getString(self: Self) []u8 {
             comptime std.debug.assert(T == u8);
@@ -222,9 +249,7 @@ pub fn CompositeListReader(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        segments: [][]u8,
-        segment: u32,
-        offsetWords: u29,
+        context: ReadContext,
 
         elementSize: u3,
         length: u29,
@@ -232,39 +257,27 @@ pub fn CompositeListReader(comptime T: type) type {
         dataWords: u16,
         ptrWords: u16,
 
-        pub fn fromPointer(segments: [][]u8, segment: u32, offsetWords: u29) Self {
+        pub fn fromReadContext(context: ReadContext) Counter.Error!Self {
             // for now, ignore the possibility that this may be a far pointer.
-            const ptr = std.mem.readIntLittle(u64, segments[segment][offsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+            var _context = context;
+            const list_ptr = (try _context.readPtr()).list;
 
-            const a = readPackedBits(ptr, 0, u2);
-            const b = readPackedBits(ptr, 2, i30);
-            const c = readPackedBits(ptr, 32, u3);
-            const d = readPackedBits(ptr, 35, u29);
-            _ = d;
+            if (list_ptr.type == 7) {
+                const struct_ptr = _context.readPtrN().struct_;
+                _context.relativeWords(1);
 
-            const headerOffsetWords: u29 = @intCast(@as(i30, (@intCast(offsetWords))) + 1 + b);
+                return Self{
+                    .context = _context,
 
-            const ptr2 = std.mem.readIntLittle(u64, segments[segment][headerOffsetWords * 8 * BYTES ..][0 .. 8 * BYTES]);
+                    .elementSize = list_ptr.elementSize,
+                    .length = @intCast(struct_ptr.offsetWords),
 
-            const a2 = readPackedBits(ptr2, 0, u2);
-            std.debug.assert(a2 == 0);
-            const b2 = readPackedBits(ptr2, 2, i30);
-            const c2 = readPackedBits(ptr2, 32, u16);
-            const d2 = readPackedBits(ptr2, 48, u16);
-
-            std.debug.assert(a == 1);
-
-            return Self{
-                .segments = segments,
-                .segment = segment,
-                .offsetWords = headerOffsetWords + 1,
-
-                .elementSize = c,
-                .length = @intCast(b2),
-
-                .dataWords = c2,
-                .ptrWords = d2,
-            };
+                    .dataWords = struct_ptr.dataWords,
+                    .ptrWords = struct_ptr.ptrWords,
+                };
+            } else {
+                unreachable;
+            }
         }
 
         pub fn iter(self: Self) ListIterator(Self, T.Reader) {
@@ -276,14 +289,13 @@ pub fn CompositeListReader(comptime T: type) type {
 
         pub fn get(self: Self, ix: u32) T.Reader {
             std.debug.assert(ix < self.length);
-            const wordSize = self.ptrWords + self.dataWords;
-            const offsetWords: u29 = @intCast(self.offsetWords + ix * wordSize);
+
+            var _context = self.context;
+            _context.relativeWords(self.ptrWords + self.dataWords);
 
             return T.Reader{
                 .reader = StructReader{
-                    .segments = self.segments,
-                    .segment = self.segment,
-                    .offsetWords = offsetWords,
+                    .context = _context,
                     .dataWords = self.dataWords,
                     .ptrWords = self.ptrWords,
                 },
@@ -294,6 +306,7 @@ pub fn CompositeListReader(comptime T: type) type {
 
 pub const Message = struct {
     segments: [][]u8 = undefined,
+    counters: ReadContext.Counters = ReadContext.Counters{},
 
     pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Message {
         var buffer: [4]u8 = undefined;
@@ -328,7 +341,7 @@ pub const Message = struct {
         allocator.free(self.segments);
     }
 
-    pub fn getRootStruct(self: *Message, comptime T: type) T.Reader {
-        return .{ .reader = StructReader.fromPointer(self.segments, 0, 0) };
+    pub fn getRootStruct(self: *Message, comptime T: type) Counter.Error!T.Reader {
+        return T.Reader{ .reader = try StructReader.fromReadContext(ReadContext.fromSegments(self.segments, &self.counters)) };
     }
 };
