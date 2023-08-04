@@ -85,6 +85,7 @@ test "simple struct unpacking" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
     const s = try message.getRootStruct(Date);
+    //std.debug.print("{}\n", .{s});
 
     try std.testing.expectEqual(@as(i16, 2023), s.getYear());
     try std.testing.expectEqual(@as(u8, 7), s.getMonth());

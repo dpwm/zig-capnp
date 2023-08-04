@@ -99,7 +99,7 @@ pub const ReadContext = struct {
 
     pub fn readIntWithBound(self: ReadContext, comptime T: type, offset: u32, boundWords: u29) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return if (pos < boundWords << 3) std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]) else 0;
+        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]) else 0;
     }
 
     pub fn readInt(self: ReadContext, comptime T: type, offset: u32) T {
@@ -262,7 +262,7 @@ pub fn CompositeListReader(comptime T: type) type {
             var _context = context;
             const list_ptr = (try _context.readPtr()).list;
 
-            if (list_ptr.type == 7) {
+            if (list_ptr.elementSize == 7) {
                 const struct_ptr = _context.readPtrN().struct_;
                 _context.relativeWords(1);
 
