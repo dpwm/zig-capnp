@@ -1,16 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
 
-pub fn readPackedBits(data: u64, comptime lsb_offset: u6, comptime T: type) T {
-    const len = @bitSizeOf(T);
-    const UT: type = @Type(.{
-        .Int = .{ .signedness = .unsigned, .bits = len },
-    });
-
-    const x = data >> lsb_offset;
-    return @bitCast(@as(UT, @truncate(x)));
-}
-
 pub const Ptr = union(enum) {
     const Struct = packed struct(u64) {
         type: u2,

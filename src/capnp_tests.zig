@@ -39,45 +39,6 @@ pub const CompositeLists = struct {
     };
 };
 
-test "basic data manipulation" {
-    var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_date_20230714.bin", .{});
-    defer file.close();
-
-    var buf = std.mem.zeroes([24]u8);
-    const n = try file.read(buf[0..]);
-
-    try testing.expectEqual(@as(usize, 24), n);
-
-    const nsegs = std.mem.readIntLittle(u32, buf[0..4]);
-    _ = nsegs;
-    const seg0 = std.mem.readIntLittle(u32, buf[4..8]);
-    _ = seg0;
-    // std.debug.print("\nnsegs: {}, seg0: {}\n", .{ nsegs, seg0 });
-
-    const ptr = std.mem.readIntLittle(u64, buf[8..16]);
-
-    const a = capnp.readPackedBits(ptr, 0, u2);
-    try testing.expectEqual(@as(u2, 0), a);
-
-    const b = capnp.readPackedBits(ptr, 0, i30);
-    try testing.expectEqual(@as(i30, 0), b);
-
-    const c = capnp.readPackedBits(ptr, 32, u16);
-    try testing.expectEqual(@as(u16, 1), c);
-
-    const d = capnp.readPackedBits(ptr, 48, u16);
-    try testing.expectEqual(@as(u16, 0), d);
-
-    const data = std.mem.readIntLittle(u64, buf[16..24]);
-    const year = capnp.readPackedBits(data, 0, i16);
-    const month = capnp.readPackedBits(data, 16, u8);
-    const day = capnp.readPackedBits(data, 24, u8);
-
-    try testing.expectEqual(@as(i16, 2023), year);
-    try testing.expectEqual(@as(u8, 7), month);
-    try testing.expectEqual(@as(u8, 14), day);
-}
-
 test "simple struct unpacking" {
     var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_date_20230714.bin", .{});
     defer file.close();
