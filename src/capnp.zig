@@ -291,7 +291,7 @@ pub fn CompositeListReader(comptime T: type) type {
             std.debug.assert(ix < self.length);
 
             var _context = self.context;
-            _context.relativeWords(self.ptrWords + self.dataWords);
+            _context.relativeWords(@intCast((self.ptrWords + self.dataWords) * ix));
 
             return T.Reader{
                 .reader = StructReader{

@@ -6,6 +6,9 @@ const Allocator = std.mem.Allocator;
 pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), cgr: schema.CodeGeneratorRequest.Reader) !void {
     var iter = (try cgr.getNodes()).iter();
     while (iter.next()) |node| {
+        //std.debug.print("id={x}\n", .{node.getId()});
+        // std.debug.print("name={s}\n", .{try node.getDisplayName()});
+
         try hashMap.put(node.getId(), node);
     }
 }
@@ -56,7 +59,7 @@ test "test1" {
 
     var it = (try s.getRequestedFiles()).iter();
     while (it.next()) |requestedFile| {
-        std.debug.print("id={}\n", .{requestedFile.getId()});
+        //std.debug.print("nodeid={x}\n", .{requestedFile.getId()});
         const node = hashMap.get(requestedFile.getId()).?;
         std.debug.print("{s}\n", .{try node.getDisplayName()});
         try print_node(hashMap, node, 1);
