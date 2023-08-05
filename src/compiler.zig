@@ -19,11 +19,27 @@ pub fn indent(depth: usize) void {
     }
 }
 
+pub fn print_field(hashMap: std.AutoHashMap(u64, schema.Node.Reader), field: schema.Field.Reader) !void {
+    std.debug.print("- {s}: ", .{try field.getName()});
+
+    switch (try field.which()) {
+        .slot => |slot| {
+            const t = try slot.getType();
+            std.debug.print("{s}\n", .{(try t.which()).toString()});
+        },
+        .group => |group| {
+            const n = hashMap.get(group.getId()).?;
+            std.debug.print("{s}\n", .{try n.getDisplayName()});
+        },
+        else => {},
+    }
+}
+
 pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) !void {
     var it = (try node.getNestedNodes()).iter();
     while (it.next()) |nestedNode| {
         const node_ = hashMap.get(nestedNode.getId()).?;
-        const w = node.which();
+        const w = try node.which();
 
         indent(depth);
         std.debug.print("{s}\n", .{try nestedNode.getName()});
@@ -33,7 +49,7 @@ pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schem
                 var fieldsIterator = (try x.getFields()).iter();
                 while (fieldsIterator.next()) |f| {
                     indent(depth);
-                    std.debug.print("- {s}\n", .{try f.getName()});
+                    try print_field(hashMap, f);
                 }
             },
             else => {},
