@@ -104,6 +104,10 @@ pub const Field = struct {
             }
         }
 
+        pub fn getDiscriminantValue(self: @This()) u16 {
+            return self.reader.readIntField(u16, 1) ^ 65535;
+        }
+
         pub fn getName(self: @This()) ![]u8 {
             return self.reader.readStringField(0);
         }

@@ -146,9 +146,10 @@ pub fn Transformer(comptime WriterType: type) type {
         const CapnpWriterType = CapnpWriter(WriterType);
         hashMap: std.AutoHashMap(u64, schema.Node.Reader),
         writer: CapnpWriterType,
+        allocator: std.mem.Allocator,
         const Self = @This();
 
-        const Error = CapnpWriterType.Error || capnp.Counter.Error;
+        const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
         pub fn print_field(self: Self, field: schema.Field.Reader) Error!void {
             _ = field;
@@ -184,14 +185,29 @@ pub fn Transformer(comptime WriterType: type) type {
                     }
 
                     if (struct_.getDiscriminantCount() > 0) {
+                        var fields_it = (try struct_.getFields()).iter();
+                        var discriminantFields = try self.allocator.alloc(schema.Field.Reader, struct_.getDiscriminantCount());
+                        defer self.allocator.free(discriminantFields);
+
+                        while (fields_it.next()) |field| {
+                            if (field.getDiscriminantValue() != 65535) {
+                                discriminantFields[field.getDiscriminantValue()] = field;
+                            }
+                        }
                         try self.writer.openTag();
+                        for (0.., discriminantFields) |n, field| {
+                            _ = n;
+                            try self.writer.printLine("{s},", .{try field.getName()});
+                        }
                         try self.writer.closeTag();
                     }
 
-                    const fields = try struct_.getFields();
-                    var fields_it = fields.iter();
-                    while (fields_it.next()) |field| {
-                        try self.print_field(field);
+                    {
+                        const fields = try struct_.getFields();
+                        var fields_it = fields.iter();
+                        while (fields_it.next()) |field| {
+                            try self.print_field(field);
+                        }
                     }
                     try self.writer.closeStruct();
                 },
@@ -215,7 +231,7 @@ test "test2" {
 
     try populateLookupTable(&hashMap, s);
     var out = capnpWriter(std.io.getStdOut().writer());
-    var transformer: Transformer(@TypeOf(out.writer)) = .{ .hashMap = hashMap, .writer = out };
+    var transformer: Transformer(@TypeOf(out.writer)) = .{ .hashMap = hashMap, .writer = out, .allocator = std.testing.allocator };
 
     var it = (try s.getRequestedFiles()).iter();
     while (it.next()) |requestedFile| {
