@@ -121,6 +121,10 @@ pub const Node = struct {
             pub fn getFields(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(Field) {
                 return self.reader.readPtrField(capnp.CompositeListReader(Field), 3);
             }
+
+            pub fn getDiscriminantCount(self: @This()) u16 {
+                return self.reader.readIntField(u16, 240 / 16);
+            }
         };
 
         file: @This().File,

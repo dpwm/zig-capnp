@@ -61,6 +61,16 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             self.indent -= 1;
             try self.writeLine("};");
         }
+
+        pub fn openTag(self: *Self) Error!void {
+            try self.writeLine("const _Tag = union(enum) {");
+            self.indent += 1;
+        }
+
+        pub fn closeTag(self: *Self) Error!void {
+            self.indent -= 1;
+            try self.writeLine("};");
+        }
     };
 }
 
@@ -171,6 +181,11 @@ pub fn Transformer(comptime WriterType: type) type {
                     var nested_it = nested.iter();
                     while (nested_it.next()) |nested_node| {
                         try self.print_node(nested_node.getId(), try nested_node.getName());
+                    }
+
+                    if (struct_.getDiscriminantCount() > 0) {
+                        try self.writer.openTag();
+                        try self.writer.closeTag();
                     }
 
                     const fields = try struct_.getFields();
