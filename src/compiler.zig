@@ -29,18 +29,26 @@ pub fn CapnpWriter(comptime WriterType: type) type {
         const Self = @This();
 
         pub fn writeLine(self: *Self, content: []const u8) Error!void {
+            try self.writeLineC(content);
+            try self.writer.writeAll("\n");
+        }
+
+        pub fn writeLineC(self: *Self, content: []const u8) Error!void {
             for (0..self.indent) |_| {
                 try self.writer.writeAll("  ");
             }
             try self.writer.writeAll(content);
-            try self.writer.writeAll("\n");
         }
 
-        pub fn printLine(self: *Self, comptime format: []const u8, args: anytype) Error!void {
+        pub fn printLineC(self: *Self, comptime format: []const u8, args: anytype) Error!void {
             for (0..self.indent) |_| {
                 try self.writer.writeAll("  ");
             }
             try self.writer.print(format, args);
+        }
+
+        pub fn printLine(self: *Self, comptime format: []const u8, args: anytype) Error!void {
+            try self.printLineC(format, args);
             try self.writer.writeAll("\n");
         }
 
@@ -54,12 +62,12 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.printLine("const {s} = struct {{", .{name});
             self.indent += 1;
 
-            try self.writeLine("reader: capnp.StructReader,");
+            try self.writeLine("reader: capnp.StructReader,\n");
         }
 
         pub fn closeStruct(self: *Self) Error!void {
             self.indent -= 1;
-            try self.writeLine("};");
+            try self.writeLine("};\n");
         }
 
         pub fn openTag(self: *Self) Error!void {
@@ -69,7 +77,29 @@ pub fn CapnpWriter(comptime WriterType: type) type {
 
         pub fn closeTag(self: *Self) Error!void {
             self.indent -= 1;
-            try self.writeLine("};");
+            try self.writeLine("};\n");
+        }
+
+        pub fn functionDefOpenArgs(self: *Self, name: []const u8) Error!void {
+            try self.printLineC("pub fn {s}(", .{name});
+        }
+
+        pub fn functionDefArgPrint(self: *Self, name: []const u8, arg_type: []const u8) Error!void {
+            return self.writer.print("{s}:{s},", .{ name, arg_type });
+        }
+
+        pub fn functionDefCloseArgs(self: *Self) Error!void {
+            try self.writer.writeAll(") ");
+        }
+
+        pub fn functionDefOpenBlock(self: *Self, return_type: []const u8) Error!void {
+            try self.writer.print("{s} {{\n", .{return_type});
+            self.indent += 1;
+        }
+
+        pub fn functionDefCloseBlock(self: *Self) Error!void {
+            self.indent -= 1;
+            try self.writeLine("}\n");
         }
     };
 }
@@ -147,14 +177,22 @@ pub fn Transformer(comptime WriterType: type) type {
         hashMap: std.AutoHashMap(u64, schema.Node.Reader),
         writer: CapnpWriterType,
         allocator: std.mem.Allocator,
+
         const Self = @This();
 
         const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
-        pub fn print_field(self: Self, field: schema.Field.Reader) Error!void {
-            _ = field;
-            _ = self;
-            return;
+        pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
+            var buffer = std.mem.zeroes([128]u8);
+            const name = try field.getName();
+            @memcpy(buffer[0..3], "get");
+            @memcpy(buffer[3..][0..name.len], name);
+            buffer[3] = std.ascii.toUpper(buffer[3]);
+
+            try self.writer.functionDefOpenArgs(buffer[0 .. 3 + name.len]);
+            try self.writer.functionDefCloseArgs();
+            try self.writer.functionDefOpenBlock("anytype");
+            try self.writer.functionDefCloseBlock();
         }
 
         pub fn print_file(self: *Self, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
