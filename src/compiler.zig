@@ -84,6 +84,10 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.printLineC("pub fn {s}(", .{name});
         }
 
+        pub fn getterOpenArgs(self: *Self, name: []const u8) Error!void {
+            try self.printLineC("pub fn get{c}{s}(", .{ std.ascii.toUpper(name[0]), name[1..] });
+        }
+
         pub fn functionDefArgPrint(self: *Self, name: []const u8, arg_type: []const u8) Error!void {
             return self.writer.print("{s}:{s},", .{ name, arg_type });
         }
@@ -92,8 +96,8 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.writer.writeAll(") ");
         }
 
-        pub fn functionDefOpenBlock(self: *Self, return_type: []const u8) Error!void {
-            try self.writer.print("{s} {{\n", .{return_type});
+        pub fn functionDefOpenBlock(self: *Self) Error!void {
+            try self.writer.writeAll(" {\n");
             self.indent += 1;
         }
 
@@ -183,15 +187,14 @@ pub fn Transformer(comptime WriterType: type) type {
         const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
         pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
-            var buffer = std.mem.zeroes([128]u8);
             const name = try field.getName();
-            @memcpy(buffer[0..3], "get");
-            @memcpy(buffer[3..][0..name.len], name);
-            buffer[3] = std.ascii.toUpper(buffer[3]);
 
-            try self.writer.functionDefOpenArgs(buffer[0 .. 3 + name.len]);
+            try self.writer.getterOpenArgs(name);
             try self.writer.functionDefCloseArgs();
-            try self.writer.functionDefOpenBlock("anytype");
+
+            try self.zigType(field);
+
+            try self.writer.functionDefOpenBlock();
             try self.writer.functionDefCloseBlock();
         }
 
@@ -209,6 +212,29 @@ pub fn Transformer(comptime WriterType: type) type {
                 },
                 else => {},
             }
+        }
+
+        pub fn zigType(self: *Self, field: schema.Field.Reader) Error!void {
+            const typename = switch (try field.which()) {
+                .slot => |slot| switch (try (try slot.getType()).which()) {
+                    .void => "void",
+                    .bool => "bool",
+                    .uint8 => "u8",
+                    .uint16 => "u16",
+                    .uint32 => "u32",
+                    .uint64 => "u64",
+                    .int8 => "i8",
+                    .int16 => "i16",
+                    .int32 => "i32",
+                    .int64 => "i64",
+
+                    else => "anytype",
+                },
+                .group => "group",
+
+                else => "anytype",
+            };
+            try self.writer.writer.writeAll(typename);
         }
 
         pub fn print_node(self: *Self, nodeId: u64, name: []const u8) Error!void {

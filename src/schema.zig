@@ -67,7 +67,7 @@ pub const Type = struct {
     };
 };
 pub const Field = struct {
-    const Tag = union(enum) {
+    pub const _Tag = union(enum) {
         const Slot = struct {
             reader: capnp.StructReader,
 
@@ -90,16 +90,16 @@ pub const Field = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub fn which(self: @This()) capnp.Counter.Error!Field.Tag {
+        pub fn which(self: @This()) capnp.Counter.Error!Field._Tag {
             switch (self.reader.readIntField(u16, 4)) {
                 0 => {
-                    return Field.Tag{ .slot = .{ .reader = self.reader } };
+                    return Field._Tag{ .slot = .{ .reader = self.reader } };
                 },
                 1 => {
-                    return Field.Tag{ .group = .{ .reader = self.reader } };
+                    return Field._Tag{ .group = .{ .reader = self.reader } };
                 },
                 else => |n| {
-                    return Field.Tag{ ._other = n };
+                    return Field._Tag{ ._other = n };
                 },
             }
         }
