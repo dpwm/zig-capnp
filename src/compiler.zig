@@ -178,59 +178,18 @@ test "test1" {
 pub fn Transformer(comptime WriterType: type) type {
     return struct {
         const CapnpWriterType = CapnpWriter(WriterType);
+        pub const StringSet = std.StringHashMap(void);
         hashMap: std.AutoHashMap(u64, schema.Node.Reader),
         writer: CapnpWriterType,
         allocator: std.mem.Allocator,
+        reserved_names: StringSet,
 
         const Self = @This();
 
         const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
-        pub fn print_field_type(self: *Self, field: schema.Field.Reader) Error!void {
-            switch (try field.which()) {
-                .slot => |slot| {
-                    try self.zigType(try slot.getType());
-                },
-                .group => |group| {
-                    const node = self.hashMap.get(group.getId()).?;
-                    const name = try node.getDisplayName();
-                    try self.writer.writer.writeAll(name);
-                },
-                else => {
-                    unreachable;
-                },
-            }
-        }
-
-        pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
-            if (field.getDiscriminantValue() != 65535) return;
-            {
-                const name = try field.getName();
-
-                try self.writer.getterOpenArgs(name);
-                try self.writer.functionDefCloseArgs();
-            }
-
-            try self.print_field_type(field);
-
-            try self.writer.functionDefOpenBlock();
-            try self.writer.functionDefCloseBlock();
-        }
-
-        pub fn print_file(self: *Self, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
-            const node = self.hashMap.get(requestedFile.getId()).?;
-            switch (try node.which()) {
-                .file => |file| {
-                    _ = file;
-                    try self.writer.toplevelImports();
-                    const nested = try node.getNestedNodes();
-                    var nested_it = nested.iter();
-                    while (nested_it.next()) |nestedNode| {
-                        try self.print_node(nestedNode.getId(), try nestedNode.getName());
-                    }
-                },
-                else => {},
-            }
+        pub fn is_reserved_name(self: Self, name: []const u8) bool {
+            return (self.reserved_names.get(name) != null);
         }
 
         pub fn zigType(self: *Self, type_: schema.Type.Reader) Error!void {
@@ -277,6 +236,53 @@ pub fn Transformer(comptime WriterType: type) type {
             try self.writer.writer.writeAll(typename);
         }
 
+        pub fn print_field_type(self: *Self, field: schema.Field.Reader) Error!void {
+            switch (try field.which()) {
+                .slot => |slot| {
+                    try self.zigType(try slot.getType());
+                },
+                .group => |group| {
+                    const node = self.hashMap.get(group.getId()).?;
+                    const name = try node.getDisplayName();
+                    _ = name;
+                },
+                else => {
+                    unreachable;
+                },
+            }
+        }
+
+        pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
+            if (field.getDiscriminantValue() != 65535) return;
+            {
+                const name = try field.getName();
+
+                try self.writer.getterOpenArgs(name);
+                try self.writer.functionDefCloseArgs();
+            }
+
+            try self.print_field_type(field);
+
+            try self.writer.functionDefOpenBlock();
+            try self.writer.functionDefCloseBlock();
+        }
+
+        pub fn print_file(self: *Self, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
+            const node = self.hashMap.get(requestedFile.getId()).?;
+            switch (try node.which()) {
+                .file => |file| {
+                    _ = file;
+                    try self.writer.toplevelImports();
+                    const nested = try node.getNestedNodes();
+                    var nested_it = nested.iter();
+                    while (nested_it.next()) |nestedNode| {
+                        try self.print_node(nestedNode.getId(), try nestedNode.getName());
+                    }
+                },
+                else => {},
+            }
+        }
+
         pub fn print_node(self: *Self, nodeId: u64, name: []const u8) Error!void {
             const node = self.hashMap.get(nodeId).?;
             switch (try node.which()) {
@@ -301,7 +307,13 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.writer.openTag();
                         for (0.., discriminantFields) |n, field| {
                             _ = n;
-                            try self.writer.printLineC(".{s}: ", .{try field.getName()});
+                            const fieldName = try field.getName();
+
+                            if (self.is_reserved_name(fieldName)) {
+                                try self.writer.printLineC(".{s}_: ", .{fieldName});
+                            } else {
+                                try self.writer.printLineC(".{s}: ", .{fieldName});
+                            }
                             try self.print_field_type(field);
                             try self.writer.writer.writeAll(",\n");
                         }
@@ -337,7 +349,17 @@ test "test2" {
 
     try populateLookupTable(&hashMap, s);
     var out = capnpWriter(std.io.getStdOut().writer());
-    var transformer: Transformer(@TypeOf(out.writer)) = .{ .hashMap = hashMap, .writer = out, .allocator = std.testing.allocator };
+    var reserved_names = std.StringHashMap(void).init(std.testing.allocator);
+    defer reserved_names.deinit();
+    try reserved_names.put("struct", {});
+    try reserved_names.put("enum", {});
+
+    var transformer: Transformer(@TypeOf(out.writer)) = .{
+        .hashMap = hashMap,
+        .writer = out,
+        .allocator = std.testing.allocator,
+        .reserved_names = reserved_names,
+    };
 
     var it = (try s.getRequestedFiles()).iter();
     while (it.next()) |requestedFile| {
