@@ -187,12 +187,27 @@ pub fn Transformer(comptime WriterType: type) type {
         const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
         pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
-            const name = try field.getName();
+            if (field.getDiscriminantValue() == 65535) return;
+            {
+                const name = try field.getName();
 
-            try self.writer.getterOpenArgs(name);
-            try self.writer.functionDefCloseArgs();
+                try self.writer.getterOpenArgs(name);
+                try self.writer.functionDefCloseArgs();
+            }
 
-            try self.zigType(field);
+            switch (try field.which()) {
+                .slot => |slot| {
+                    try self.zigType(try slot.getType());
+                },
+                .group => |group| {
+                    const node = self.hashMap.get(group.getId()).?;
+                    const name = try node.getDisplayName();
+                    try self.writer.writer.writeAll(name);
+                },
+                else => {
+                    try self.writer.writer.writeAll("other");
+                },
+            }
 
             try self.writer.functionDefOpenBlock();
             try self.writer.functionDefCloseBlock();
@@ -214,23 +229,44 @@ pub fn Transformer(comptime WriterType: type) type {
             }
         }
 
-        pub fn zigType(self: *Self, field: schema.Field.Reader) Error!void {
-            const typename = switch (try field.which()) {
-                .slot => |slot| switch (try (try slot.getType()).which()) {
-                    .void => "void",
-                    .bool => "bool",
-                    .uint8 => "u8",
-                    .uint16 => "u16",
-                    .uint32 => "u32",
-                    .uint64 => "u64",
-                    .int8 => "i8",
-                    .int16 => "i16",
-                    .int32 => "i32",
-                    .int64 => "i64",
-
-                    else => "anytype",
+        pub fn zigType(self: *Self, type_: schema.Type.Reader) Error!void {
+            const typename = switch (try type_.which()) {
+                .void => "void",
+                .bool => "bool",
+                .uint8 => "u8",
+                .uint16 => "u16",
+                .uint32 => "u32",
+                .uint64 => "u64",
+                .int8 => "i8",
+                .int16 => "i16",
+                .int32 => "i32",
+                .int64 => "i64",
+                .float32 => "f32",
+                .float64 => "f64",
+                .text => "[]const u8",
+                .data => "[]const u8",
+                .list => |list| {
+                    switch (try (try list.getElementType()).which()) {
+                        .struct_ => |struct_| {
+                            _ = struct_;
+                            try self.writer.writer.writeAll("Error!capnp.CompositeListReader(");
+                        },
+                        else => {
+                            try self.writer.writer.writeAll("Error!capnp.ListReader(");
+                        },
+                    }
+                    try self.zigType(try list.getElementType());
+                    try self.writer.writer.writeAll(")");
+                    return;
                 },
-                .group => "group",
+                .struct_ => |struct_| blk: {
+                    const node = self.hashMap.get(struct_.getId()).?;
+                    const name = try node.getDisplayName();
+                    const pos = if (std.mem.indexOfScalar(u8, name, ':')) |x| (x + 1) else 0;
+                    break :blk name[pos..];
+                },
+                .enum_ => "enum",
+                .anyPointer => "capnp.AnyPointer",
 
                 else => "anytype",
             };

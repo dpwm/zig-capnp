@@ -13,6 +13,22 @@ pub const Type = struct {
             reader: capnp.StructReader,
         };
 
+        pub const Struct = struct {
+            reader: capnp.StructReader,
+
+            pub fn getId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 1);
+            }
+        };
+
+        pub const AnyPointer = struct {
+            reader: capnp.StructReader,
+        };
+
+        pub const Interface = struct {
+            reader: capnp.StructReader,
+        };
+
         void,
         bool,
         int8,
@@ -29,9 +45,9 @@ pub const Type = struct {
         data,
         list: List,
         enum_: Enum,
-        // struct_: Struct,
-        // interface: Interface,
-        // anyPointer: AnyPointer,
+        struct_: Struct,
+        interface: Interface,
+        anyPointer: AnyPointer,
         _other: u16,
 
         pub fn toString(self: Tag) []const u8 {
@@ -61,6 +77,10 @@ pub const Type = struct {
                 12 => .text,
                 13 => .data,
                 14 => .{ .list = .{ .reader = self.reader } },
+                15 => .{ .enum_ = .{ .reader = self.reader } },
+                16 => .{ .struct_ = .{ .reader = self.reader } },
+                17 => .{ .interface = .{ .reader = self.reader } },
+                18 => .{ .anyPointer = .{ .reader = self.reader } },
                 else => |n| .{ ._other = n },
             };
         }
