@@ -186,15 +186,7 @@ pub fn Transformer(comptime WriterType: type) type {
 
         const Error = std.mem.Allocator.Error || CapnpWriterType.Error || capnp.Counter.Error;
 
-        pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
-            if (field.getDiscriminantValue() == 65535) return;
-            {
-                const name = try field.getName();
-
-                try self.writer.getterOpenArgs(name);
-                try self.writer.functionDefCloseArgs();
-            }
-
+        pub fn print_field_type(self: *Self, field: schema.Field.Reader) Error!void {
             switch (try field.which()) {
                 .slot => |slot| {
                     try self.zigType(try slot.getType());
@@ -205,9 +197,21 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.writer.writer.writeAll(name);
                 },
                 else => {
-                    try self.writer.writer.writeAll("other");
+                    unreachable;
                 },
             }
+        }
+
+        pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
+            if (field.getDiscriminantValue() == 65535) return;
+            {
+                const name = try field.getName();
+
+                try self.writer.getterOpenArgs(name);
+                try self.writer.functionDefCloseArgs();
+            }
+
+            try self.print_field_type(field);
 
             try self.writer.functionDefOpenBlock();
             try self.writer.functionDefCloseBlock();
@@ -297,7 +301,9 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.writer.openTag();
                         for (0.., discriminantFields) |n, field| {
                             _ = n;
-                            try self.writer.printLine("{s},", .{try field.getName()});
+                            try self.writer.printLineC(".{s}: ", .{try field.getName()});
+                            try self.print_field_type(field);
+                            try self.writer.writer.writeAll(",\n");
                         }
                         try self.writer.closeTag();
                     }
