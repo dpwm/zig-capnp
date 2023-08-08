@@ -203,7 +203,7 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
-            if (field.getDiscriminantValue() == 65535) return;
+            if (field.getDiscriminantValue() != 65535) return;
             {
                 const name = try field.getName();
 
