@@ -3,7 +3,9 @@ const capnp = @import("capnp.zig");
 const schema = @import("schema.zig");
 const Allocator = std.mem.Allocator;
 
-pub fn populateLookupTable(hashMap: *std.AutoHashMap(u64, schema.Node.Reader), cgr: schema.CodeGeneratorRequest.Reader) !void {
+const NodeIdMap = std.AutoHashMap(u64, schema.Node.Reader);
+
+pub fn populateLookupTable(hashMap: *NodeIdMap, cgr: schema.CodeGeneratorRequest.Reader) !void {
     var iter = (try cgr.getNodes()).iter();
     while (iter.next()) |node| {
         //std.debug.print("id={x}\n", .{node.getId()});
@@ -55,6 +57,7 @@ pub fn CapnpWriter(comptime WriterType: type) type {
         pub fn toplevelImports(self: *Self) Error!void {
             try self.writeLine("const std = @import(\"std\");");
             try self.writeLine("const capnp = @import(\"capnp.zig\");");
+            try self.writeLine("const _Root = @This();");
             try self.writer.writeAll("\n");
         }
 
@@ -112,74 +115,11 @@ pub fn capnpWriter(writer: anytype) CapnpWriter(@TypeOf(writer)) {
     return .{ .writer = writer };
 }
 
-pub fn print_field(hashMap: std.AutoHashMap(u64, schema.Node.Reader), field: schema.Field.Reader) !void {
-    std.debug.print("- {s}: ", .{try field.getName()});
-
-    switch (try field.which()) {
-        .slot => |slot| {
-            const t = try slot.getType();
-            std.debug.print("{s}\n", .{(try t.which()).toString()});
-        },
-        .group => |group| {
-            const n = hashMap.get(group.getId()).?;
-            std.debug.print("{s}\n", .{try n.getDisplayName()});
-        },
-        else => {},
-    }
-}
-
-pub fn print_node(hashMap: std.AutoHashMap(u64, schema.Node.Reader), node: schema.Node.Reader, depth: u32) !void {
-    var it = (try node.getNestedNodes()).iter();
-    while (it.next()) |nestedNode| {
-        const node_ = hashMap.get(nestedNode.getId()).?;
-        const w = try node.which();
-
-        indent(depth);
-        std.debug.print("{s}\n", .{try nestedNode.getName()});
-
-        switch (w) {
-            .struct_ => |x| {
-                var fieldsIterator = (try x.getFields()).iter();
-                while (fieldsIterator.next()) |f| {
-                    indent(depth);
-                    try print_field(hashMap, f);
-                }
-            },
-            else => {},
-        }
-
-        try print_node(hashMap, node_, depth + 1);
-    }
-}
-
-test "test1" {
-    var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
-    defer file.close();
-
-    var message = try capnp.Message.fromFile(file, std.testing.allocator);
-    defer message.deinit(std.testing.allocator);
-
-    const s = try message.getRootStruct(schema.CodeGeneratorRequest);
-    var hashMap = std.AutoHashMap(u64, schema.Node.Reader).init(std.testing.allocator);
-    defer hashMap.deinit();
-
-    try populateLookupTable(&hashMap, s);
-    std.debug.print("s={}\n", .{s});
-
-    var it = (try s.getRequestedFiles()).iter();
-    while (it.next()) |requestedFile| {
-        //std.debug.print("nodeid={x}\n", .{requestedFile.getId()});
-        const node = hashMap.get(requestedFile.getId()).?;
-        std.debug.print("{s}\n", .{try node.getDisplayName()});
-        try print_node(hashMap, node, 1);
-    }
-}
-
 pub fn Transformer(comptime WriterType: type) type {
     return struct {
         const CapnpWriterType = CapnpWriter(WriterType);
         pub const StringSet = std.StringHashMap(void);
-        hashMap: std.AutoHashMap(u64, schema.Node.Reader),
+        hashMap: NodeIdMap,
         writer: CapnpWriterType,
         allocator: std.mem.Allocator,
         reserved_names: StringSet,
@@ -244,7 +184,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 .group => |group| {
                     const node = self.hashMap.get(group.getId()).?;
                     const name = try node.getDisplayName();
-                    _ = name;
+                    try self.writer.writer.writeAll(name);
                 },
                 else => {
                     unreachable;
@@ -336,6 +276,50 @@ pub fn Transformer(comptime WriterType: type) type {
     };
 }
 
+// Just using one file for now. We will add this back in later
+const PathTable = struct {
+    const PathMap = std.AutoHashMap(u64, []const u8);
+    const Error = Allocator.Error || capnp.Counter.Error;
+    pathMap: PathMap,
+    nodeIdMap: NodeIdMap,
+    allocator: Allocator,
+
+    pub fn init(nodeIdMap: NodeIdMap) PathTable {
+        const allocator = nodeIdMap.allocator;
+        return PathTable{ .pathMap = PathMap.init(allocator), .allocator = allocator, .nodeIdMap = nodeIdMap };
+    }
+    pub fn update(self: *PathTable, name: []const u8, nodeId: u64) Error!void {
+        const node = self.nodeIdMap.get(nodeId).?;
+        var it = (try node.getNestedNodes()).iter();
+
+        var path: []const u8 = "";
+        if (self.pathMap.get(node.getScopeId())) |parentName| {
+            path = try std.fmt.allocPrint(self.allocator, "{s}.{s}", .{ parentName, name });
+        } else {
+            path = try std.fmt.allocPrint(self.allocator, "{s}", .{name});
+        }
+        std.debug.print("{s}\n", .{path});
+
+        try self.pathMap.put(node.getId(), path);
+
+        while (it.next()) |nestedNode| {
+            try self.update(try nestedNode.getName(), nestedNode.getId());
+        }
+    }
+
+    pub fn updateFile(self: *PathTable, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
+        try self.update("_Root", requestedFile.getId());
+    }
+
+    pub fn deinit(self: *PathTable) void {
+        var it = self.pathMap.valueIterator();
+        while (it.next()) |value| {
+            self.allocator.free(value.*);
+        }
+        self.pathMap.deinit();
+    }
+};
+
 test "test2" {
     var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
     defer file.close();
@@ -354,15 +338,29 @@ test "test2" {
     try reserved_names.put("struct", {});
     try reserved_names.put("enum", {});
 
+    var pathTable = PathTable.init(hashMap);
+    defer pathTable.deinit();
+
+    {
+        var it = (try s.getRequestedFiles()).iter();
+        while (it.next()) |requestedFile| {
+            try pathTable.updateFile(requestedFile);
+        }
+    }
+
     var transformer: Transformer(@TypeOf(out.writer)) = .{
         .hashMap = hashMap,
         .writer = out,
         .allocator = std.testing.allocator,
         .reserved_names = reserved_names,
     };
+    _ = transformer;
 
-    var it = (try s.getRequestedFiles()).iter();
-    while (it.next()) |requestedFile| {
-        try transformer.print_file(requestedFile);
+    {
+        var it = (try s.getRequestedFiles()).iter();
+        while (it.next()) |requestedFile| {
+            _ = requestedFile;
+            //try transformer.print_file(requestedFile);
+        }
     }
 }

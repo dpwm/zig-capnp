@@ -86,6 +86,7 @@ pub const Type = struct {
         }
     };
 };
+
 pub const Field = struct {
     pub const _Tag = union(enum) {
         const Slot = struct {
@@ -209,6 +210,10 @@ pub const Node = struct {
 
         pub fn getDisplayName(self: Reader) capnp.Counter.Error![]u8 {
             return self.reader.readStringField(0);
+        }
+
+        pub fn getScopeId(self: Reader) u64 {
+            return self.reader.readIntField(u64, 2);
         }
 
         pub fn getNestedNodes(self: @This()) capnp.Counter.Error!capnp.CompositeListReader(Node.NestedNode) {
