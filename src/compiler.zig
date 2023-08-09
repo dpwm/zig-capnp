@@ -123,6 +123,7 @@ pub fn Transformer(comptime WriterType: type) type {
         writer: CapnpWriterType,
         allocator: std.mem.Allocator,
         reserved_names: StringSet,
+        pathTable: PathTable,
 
         const Self = @This();
 
@@ -162,12 +163,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.writer.writer.writeAll(")");
                     return;
                 },
-                .struct_ => |struct_| blk: {
-                    const node = self.hashMap.get(struct_.getId()).?;
-                    const name = try node.getDisplayName();
-                    const pos = if (std.mem.indexOfScalar(u8, name, ':')) |x| (x + 1) else 0;
-                    break :blk name[pos..];
-                },
+                .struct_ => |struct_| self.pathTable.get(struct_.getId()).?,
                 .enum_ => "enum",
                 .anyPointer => "capnp.AnyPointer",
 
@@ -298,13 +294,16 @@ const PathTable = struct {
         } else {
             path = try std.fmt.allocPrint(self.allocator, "{s}", .{name});
         }
-        std.debug.print("{s}\n", .{path});
 
         try self.pathMap.put(node.getId(), path);
 
         while (it.next()) |nestedNode| {
             try self.update(try nestedNode.getName(), nestedNode.getId());
         }
+    }
+
+    pub fn get(self: PathTable, id: u64) ?[]const u8 {
+        return self.pathMap.get(id);
     }
 
     pub fn updateFile(self: *PathTable, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
@@ -348,19 +347,18 @@ test "test2" {
         }
     }
 
-    var transformer: Transformer(@TypeOf(out.writer)) = .{
+    var transformer = Transformer(@TypeOf(out.writer)){
         .hashMap = hashMap,
         .writer = out,
         .allocator = std.testing.allocator,
         .reserved_names = reserved_names,
+        .pathTable = pathTable,
     };
-    _ = transformer;
 
     {
         var it = (try s.getRequestedFiles()).iter();
         while (it.next()) |requestedFile| {
-            _ = requestedFile;
-            //try transformer.print_file(requestedFile);
+            try transformer.print_file(requestedFile);
         }
     }
 }
