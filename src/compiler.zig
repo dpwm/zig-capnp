@@ -49,6 +49,10 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.writer.print(format, args);
         }
 
+        pub fn writeCapitalized(self: *Self, x: []const u8) Error!void {
+            try self.writer.print("{c}{s}", .{ std.ascii.toUpper(x[0]), x[1..] });
+        }
+
         pub fn printLine(self: *Self, comptime format: []const u8, args: anytype) Error!void {
             try self.printLineC(format, args);
             try self.writer.writeAll("\n");
@@ -180,7 +184,9 @@ pub fn Transformer(comptime WriterType: type) type {
                 .group => |group| {
                     const node = self.hashMap.get(group.getId()).?;
                     const name = try node.getDisplayName();
-                    try self.writer.writer.writeAll(name);
+                    const pos = node.getDisplayNamePrefixLength();
+                    try self.writer.writer.writeAll("_Tag.");
+                    try self.writer.writeCapitalized(name[pos..]);
                 },
                 else => {
                     unreachable;

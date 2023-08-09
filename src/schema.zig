@@ -212,6 +212,10 @@ pub const Node = struct {
             return self.reader.readStringField(0);
         }
 
+        pub fn getDisplayNamePrefixLength(self: Reader) u32 {
+            return self.reader.readIntField(u32, 2);
+        }
+
         pub fn getScopeId(self: Reader) u64 {
             return self.reader.readIntField(u64, 2);
         }
