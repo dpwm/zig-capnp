@@ -64,7 +64,9 @@ pub fn CapnpWriter(comptime WriterType: type) type {
         pub fn openStruct(self: *Self, name: anytype) Error!void {
             try self.printLine("const {s} = struct {{", .{name});
             self.indent += 1;
+        }
 
+        pub fn declareReader(self: *Self) Error!void {
             try self.writeLine("reader: capnp.StructReader,\n");
         }
 
@@ -247,54 +249,62 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.print_node(nested_node.getId(), try nested_node.getName());
                     }
 
-                    if (struct_.getDiscriminantCount() > 0) {
-                        var discriminantFields = try self.allocator.alloc(schema.Field.Reader, struct_.getDiscriminantCount());
-                        defer self.allocator.free(discriminantFields);
-
-                        {
-                            var fields_it = (try struct_.getFields()).iter();
-
-                            while (fields_it.next()) |field| {
-                                if (field.getDiscriminantValue() != 65535) {
-                                    discriminantFields[field.getDiscriminantValue()] = field;
-                                }
-                            }
-                        }
-
-                        try self.writer.openTag();
-                        {
-                            for (discriminantFields) |field| {
-                                switch (try field.which()) {
-                                    .group => |group| {
-                                        try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
-                                    },
-                                    else => {},
-                                }
-                            }
-                        }
-
-                        for (0.., discriminantFields) |n, field| {
-                            _ = n;
-                            const fieldName = try field.getName();
-
-                            if (self.is_reserved_name(fieldName)) {
-                                try self.writer.printLineC("{s}_: ", .{fieldName});
-                            } else {
-                                try self.writer.printLineC("{s}: ", .{fieldName});
-                            }
-                            try self.print_field_type(field);
-                            try self.writer.writer.writeAll(",\n");
-                        }
-                        try self.writer.closeTag();
-                    }
-
                     {
-                        const fields = try struct_.getFields();
-                        var fields_it = fields.iter();
-                        while (fields_it.next()) |field| {
-                            try self.print_field(field);
+                        // Define the reader
+                        try self.writer.openStruct("Reader");
+                        try self.writer.declareReader();
+
+                        if (struct_.getDiscriminantCount() > 0) {
+                            var discriminantFields = try self.allocator.alloc(schema.Field.Reader, struct_.getDiscriminantCount());
+                            defer self.allocator.free(discriminantFields);
+
+                            {
+                                var fields_it = (try struct_.getFields()).iter();
+
+                                while (fields_it.next()) |field| {
+                                    if (field.getDiscriminantValue() != 65535) {
+                                        discriminantFields[field.getDiscriminantValue()] = field;
+                                    }
+                                }
+                            }
+
+                            try self.writer.openTag();
+                            {
+                                for (discriminantFields) |field| {
+                                    switch (try field.which()) {
+                                        .group => |group| {
+                                            try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
+                                        },
+                                        else => {},
+                                    }
+                                }
+                            }
+
+                            for (0.., discriminantFields) |n, field| {
+                                _ = n;
+                                const fieldName = try field.getName();
+
+                                if (self.is_reserved_name(fieldName)) {
+                                    try self.writer.printLineC("{s}_: ", .{fieldName});
+                                } else {
+                                    try self.writer.printLineC("{s}: ", .{fieldName});
+                                }
+                                try self.print_field_type(field);
+                                try self.writer.writer.writeAll(",\n");
+                            }
+                            try self.writer.closeTag();
+                        }
+
+                        {
+                            const fields = try struct_.getFields();
+                            var fields_it = fields.iter();
+                            while (fields_it.next()) |field| {
+                                try self.print_field(field);
+                            }
                         }
                     }
+                    try self.writer.closeStruct();
+
                     try self.writer.closeStruct();
                 },
 
