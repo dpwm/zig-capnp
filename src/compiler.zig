@@ -226,7 +226,7 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn print_node(self: *Self, nodeId: u64, name: []const u8) Error!void {
-            const node = self.hashMap.get(nodeId).?;
+            const node = self.hashMap.get(nodeId) orelse return Allocator.Error.OutOfMemory;
             switch (try node.which()) {
                 .struct_ => |struct_| {
                     try self.writer.openStruct(name);
@@ -237,16 +237,31 @@ pub fn Transformer(comptime WriterType: type) type {
                     }
 
                     if (struct_.getDiscriminantCount() > 0) {
-                        var fields_it = (try struct_.getFields()).iter();
                         var discriminantFields = try self.allocator.alloc(schema.Field.Reader, struct_.getDiscriminantCount());
                         defer self.allocator.free(discriminantFields);
 
-                        while (fields_it.next()) |field| {
-                            if (field.getDiscriminantValue() != 65535) {
-                                discriminantFields[field.getDiscriminantValue()] = field;
+                        {
+                            var fields_it = (try struct_.getFields()).iter();
+
+                            while (fields_it.next()) |field| {
+                                if (field.getDiscriminantValue() != 65535) {
+                                    discriminantFields[field.getDiscriminantValue()] = field;
+                                }
                             }
                         }
+
                         try self.writer.openTag();
+                        {
+                            for (discriminantFields) |field| {
+                                switch (try field.which()) {
+                                    .group => |group| {
+                                        try self.print_node(group.getId(), try field.getName());
+                                    },
+                                    else => {},
+                                }
+                            }
+                        }
+
                         for (0.., discriminantFields) |n, field| {
                             _ = n;
                             const fieldName = try field.getName();
