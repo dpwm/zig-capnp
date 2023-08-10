@@ -6,7 +6,7 @@ Yet another capnproto code generator attempt for zig
 We are currently in early stages of development. This is not a useful project yet!
 
 - [x] Minimal reading
-- [ ] Reading of capnproto
+- [x] Reading of capnproto
 - [ ] Code generation (Reader)
 - [ ] Code generation (Builder)
 - [ ] Packed messages
