@@ -61,7 +61,7 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.writer.writeAll("\n");
         }
 
-        pub fn openStruct(self: *Self, name: []const u8) Error!void {
+        pub fn openStruct(self: *Self, name: anytype) Error!void {
             try self.printLine("const {s} = struct {{", .{name});
             self.indent += 1;
 
@@ -236,7 +236,7 @@ pub fn Transformer(comptime WriterType: type) type {
             }
         }
 
-        pub fn print_node(self: *Self, nodeId: u64, name: []const u8) Error!void {
+        pub fn print_node(self: *Self, nodeId: u64, name: anytype) Error!void {
             const node = self.hashMap.get(nodeId) orelse return Allocator.Error.OutOfMemory;
             switch (try node.which()) {
                 .struct_ => |struct_| {
@@ -266,7 +266,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             for (discriminantFields) |field| {
                                 switch (try field.which()) {
                                     .group => |group| {
-                                        try self.print_node(group.getId(), try field.getName());
+                                        try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
                                     },
                                     else => {},
                                 }
