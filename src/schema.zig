@@ -11,6 +11,10 @@ pub const Type = struct {
 
         pub const Enum = struct {
             reader: capnp.StructReader,
+
+            pub fn getTypeId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 1);
+            }
         };
 
         pub const Struct = struct {

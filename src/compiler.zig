@@ -180,7 +180,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     return;
                 },
                 .struct_ => |struct_| self.pathTable.get(struct_.getId()).?,
-                .enum_ => "enum",
+                .enum_ => |enum_| self.pathTable.get(enum_.getTypeId()).?,
                 .anyPointer => "capnp.AnyPointer",
 
                 else => "anytype",
@@ -278,9 +278,9 @@ pub fn Transformer(comptime WriterType: type) type {
                             const fieldName = try field.getName();
 
                             if (self.is_reserved_name(fieldName)) {
-                                try self.writer.printLineC(".{s}_: ", .{fieldName});
+                                try self.writer.printLineC("{s}_: ", .{fieldName});
                             } else {
-                                try self.writer.printLineC(".{s}: ", .{fieldName});
+                                try self.writer.printLineC("{s}: ", .{fieldName});
                             }
                             try self.print_field_type(field);
                             try self.writer.writer.writeAll(",\n");
@@ -368,6 +368,8 @@ test "test2" {
     defer reserved_names.deinit();
     try reserved_names.put("struct", {});
     try reserved_names.put("enum", {});
+
+    try reserved_names.put("const", {});
 
     var pathTable = PathTable.init(hashMap);
     defer pathTable.deinit();
