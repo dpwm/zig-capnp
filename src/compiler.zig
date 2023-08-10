@@ -49,10 +49,6 @@ pub fn CapnpWriter(comptime WriterType: type) type {
             try self.writer.print(format, args);
         }
 
-        pub fn writeCapitalized(self: *Self, x: []const u8) Error!void {
-            try self.writer.print("{c}{s}", .{ std.ascii.toUpper(x[0]), x[1..] });
-        }
-
         pub fn printLine(self: *Self, comptime format: []const u8, args: anytype) Error!void {
             try self.printLineC(format, args);
             try self.writer.writeAll("\n");
@@ -92,7 +88,7 @@ pub fn CapnpWriter(comptime WriterType: type) type {
         }
 
         pub fn getterOpenArgs(self: *Self, name: []const u8) Error!void {
-            try self.printLineC("pub fn get{c}{s}(", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try self.printLineC("pub fn get{s}(", .{Capitalized.wrap(name)});
         }
 
         pub fn functionDefArgPrint(self: *Self, name: []const u8, arg_type: []const u8) Error!void {
@@ -118,6 +114,22 @@ pub fn CapnpWriter(comptime WriterType: type) type {
 pub fn capnpWriter(writer: anytype) CapnpWriter(@TypeOf(writer)) {
     return .{ .writer = writer };
 }
+
+const Capitalized = struct {
+    str: []const u8,
+
+    pub fn wrap(str: []const u8) Capitalized {
+        return Capitalized{ .str = str };
+    }
+
+    pub fn format(value: Capitalized, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        _ = fmt;
+
+        if (value.str.len == 0) return;
+        try writer.print("{c}{s}", .{ std.ascii.toUpper(value.str[0]), value.str[1..] });
+    }
+};
 
 pub fn Transformer(comptime WriterType: type) type {
     return struct {
@@ -185,8 +197,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     const node = self.hashMap.get(group.getId()).?;
                     const name = try node.getDisplayName();
                     const pos = node.getDisplayNamePrefixLength();
-                    try self.writer.writer.writeAll("_Tag.");
-                    try self.writer.writeCapitalized(name[pos..]);
+                    try self.writer.writer.print("_Tag.{}", .{Capitalized.wrap(name[pos..])});
                 },
                 else => {
                     unreachable;
