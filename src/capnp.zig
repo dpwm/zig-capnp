@@ -48,6 +48,8 @@ pub const Ptr = union(enum) {
     }
 };
 
+pub const Error = Counter.Error;
+
 pub const Counter = struct {
     count: usize = 0,
     limit: usize,
@@ -56,11 +58,11 @@ pub const Counter = struct {
         LimitExceeded,
     };
 
-    pub fn increment(self: *Counter, x: usize) Error!void {
+    pub fn increment(self: *Counter, x: usize) Counter.Error!void {
         self.count += x;
 
         if (self.count >= self.limit) {
-            return Error.LimitExceeded;
+            return Counter.Error.LimitExceeded;
         }
     }
 };

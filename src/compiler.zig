@@ -169,10 +169,10 @@ pub fn Transformer(comptime WriterType: type) type {
                     switch (try (try list.getElementType()).which()) {
                         .struct_ => |struct_| {
                             _ = struct_;
-                            try self.writer.writer.writeAll("Error!capnp.CompositeListReader(");
+                            try self.writer.writer.writeAll("capnp.Error!capnp.CompositeListReader(");
                         },
                         else => {
-                            try self.writer.writer.writeAll("Error!capnp.ListReader(");
+                            try self.writer.writer.writeAll("capnp.Error!capnp.ListReader(");
                         },
                     }
                     try self.zigType(try list.getElementType());
@@ -368,7 +368,6 @@ test "test2" {
     defer reserved_names.deinit();
     try reserved_names.put("struct", {});
     try reserved_names.put("enum", {});
-
     try reserved_names.put("const", {});
 
     var pathTable = PathTable.init(hashMap);
