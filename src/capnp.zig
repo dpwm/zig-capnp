@@ -29,13 +29,16 @@ pub const Ptr = union(enum) {
         type: u2,
         _: u62,
     };
-
+    null: void,
     struct_: Struct,
     list: List,
     inter_segment: InterSegment,
     capability: Capability,
 
     pub fn of_u64(ptr: u64) Ptr {
+        if (ptr == 0) {
+            return Ptr.null;
+        }
         return switch (@as(Ptr.Type, @bitCast(ptr)).type) {
             0 => Ptr{ .struct_ = @bitCast(ptr) },
             1 => Ptr{ .list = @bitCast(ptr) },
@@ -193,19 +196,32 @@ pub fn ListReader(comptime T: type) type {
         pub fn fromReadContext(context: ReadContext) Counter.Error!Self {
             // for now, ignore the possibility that this may be a far pointer.
             var _context = context;
+            switch (try _context.readPtr()) {
+                .list => |list| {
+                    if (T == u8) {
+                        std.debug.assert(list.elementSize == 2);
+                    }
+
+                    return Self{
+                        .context = _context,
+                        .elementSize = list.elementSize,
+                        .length = list.elementsOrWords,
+                    };
+                },
+                .null => {
+                    return Self{
+                        .context = context,
+                        .elementSize = 0,
+                        .length = 0,
+                    };
+                },
+                else => unreachable,
+            }
             const list = (try _context.readPtr()).list;
+            _ = list;
 
             //std.debug.print("offsetWords={}, startOffsetWords={}, b={}\n", .{ offsetWords, startOffsetWords, b });
 
-            if (T == u8) {
-                std.debug.assert(list.elementSize == 2);
-            }
-
-            return Self{
-                .context = _context,
-                .elementSize = list.elementSize,
-                .length = list.elementsOrWords,
-            };
         }
         pub fn get(self: Self, ix: u32) T {
             return self.context.readInt(T, ix);
@@ -250,23 +266,36 @@ pub fn CompositeListReader(comptime T: type) type {
         pub fn fromReadContext(context: ReadContext) Counter.Error!Self {
             // for now, ignore the possibility that this may be a far pointer.
             var _context = context;
-            const list_ptr = (try _context.readPtr()).list;
 
-            if (list_ptr.elementSize == 7) {
-                const struct_ptr = _context.readPtrN().struct_;
-                _context.relativeWords(1);
+            switch (try _context.readPtr()) {
+                .list => |list_ptr| {
+                    if (list_ptr.elementSize == 7) {
+                        const struct_ptr = _context.readPtrN().struct_;
+                        _context.relativeWords(1);
 
-                return Self{
-                    .context = _context,
+                        return Self{
+                            .context = _context,
 
-                    .elementSize = list_ptr.elementSize,
-                    .length = @intCast(struct_ptr.offsetWords),
+                            .elementSize = list_ptr.elementSize,
+                            .length = @intCast(struct_ptr.offsetWords),
 
-                    .dataWords = struct_ptr.dataWords,
-                    .ptrWords = struct_ptr.ptrWords,
-                };
-            } else {
-                unreachable;
+                            .dataWords = struct_ptr.dataWords,
+                            .ptrWords = struct_ptr.ptrWords,
+                        };
+                    } else {
+                        unreachable;
+                    }
+                },
+                .null => {
+                    return Self{
+                        .context = _context,
+                        .elementSize = 0,
+                        .length = 0,
+                        .dataWords = 0,
+                        .ptrWords = 0,
+                    };
+                },
+                else => unreachable,
             }
         }
 
