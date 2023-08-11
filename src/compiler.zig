@@ -165,8 +165,8 @@ pub fn Transformer(comptime WriterType: type) type {
                 .int64 => "i64",
                 .float32 => "f32",
                 .float64 => "f64",
-                .text => "[]const u8",
-                .data => "[]const u8",
+                .text => "capnp.Error![]const u8",
+                .data => "capnp.Error![]const u8",
                 .list => |list| {
                     switch (try (try list.getElementType()).which()) {
                         .struct_ => |struct_| {
@@ -243,13 +243,19 @@ pub fn Transformer(comptime WriterType: type) type {
             switch (try node.which()) {
                 .struct_ => |struct_| {
                     try self.writer.openStruct(name);
-                    const nested = try node.getNestedNodes();
-                    var nested_it = nested.iter();
-                    while (nested_it.next()) |nested_node| {
-                        try self.print_node(nested_node.getId(), try nested_node.getName());
+
+                    { // Nested Nodes
+
+                        const nested = try node.getNestedNodes();
+                        var nested_it = nested.iter();
+
+                        while (nested_it.next()) |nested_node| {
+                            try self.print_node(nested_node.getId(), try nested_node.getName());
+                        }
                     }
 
                     {
+
                         // Define the reader
                         try self.writer.openStruct("Reader");
                         try self.writer.declareReader();
@@ -268,41 +274,33 @@ pub fn Transformer(comptime WriterType: type) type {
                                 }
                             }
 
-                            try self.writer.openTag();
                             {
-                                for (discriminantFields) |field| {
-                                    switch (try field.which()) {
-                                        .group => |group| {
-                                            try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
-                                        },
-                                        else => {},
+                                try self.writer.openStruct("_Tag");
+
+                                for (0.., discriminantFields) |n, field| {
+                                    _ = n;
+                                    const fieldName = try field.getName();
+
+                                    if (self.is_reserved_name(fieldName)) {
+                                        try self.writer.printLineC("{s}_: ", .{fieldName});
+                                    } else {
+                                        try self.writer.printLineC("{s}: ", .{fieldName});
                                     }
+                                    try self.print_field_type(field);
+                                    try self.writer.writer.writeAll(",\n");
                                 }
-                            }
-
-                            for (0.., discriminantFields) |n, field| {
-                                _ = n;
-                                const fieldName = try field.getName();
-
-                                if (self.is_reserved_name(fieldName)) {
-                                    try self.writer.printLineC("{s}_: ", .{fieldName});
-                                } else {
-                                    try self.writer.printLineC("{s}: ", .{fieldName});
-                                }
-                                try self.print_field_type(field);
-                                try self.writer.writer.writeAll(",\n");
-                            }
-                            try self.writer.closeTag();
-                        }
-
-                        {
-                            const fields = try struct_.getFields();
-                            var fields_it = fields.iter();
-                            while (fields_it.next()) |field| {
-                                try self.print_field(field);
+                                try self.writer.closeStruct();
                             }
                         }
                     }
+                    {
+                        const fields = try struct_.getFields();
+                        var fields_it = fields.iter();
+                        while (fields_it.next()) |field| {
+                            try self.print_field(field);
+                        }
+                    }
+
                     try self.writer.closeStruct();
 
                     try self.writer.closeStruct();
@@ -351,7 +349,7 @@ const PathTable = struct {
                     while (field_it.next()) |field| {
                         switch (try field.which()) {
                             .group => |group| {
-                                const groupName = try std.fmt.bufPrint(&buffer, "_Field.{}", .{Capitalized.wrap(try field.getName())});
+                                const groupName = try std.fmt.bufPrint(&buffer, "_Group.{}", .{Capitalized.wrap(try field.getName())});
                                 try self.update(groupName, group.getId());
                             },
                             else => {},
