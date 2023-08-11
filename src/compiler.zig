@@ -165,16 +165,16 @@ pub fn Transformer(comptime WriterType: type) type {
                 .int64 => "i64",
                 .float32 => "f32",
                 .float64 => "f64",
-                .text => "capnp.Error![]const u8",
-                .data => "capnp.Error![]const u8",
+                .text => "[]const u8",
+                .data => "[]const u8",
                 .list => |list| {
                     switch (try (try list.getElementType()).which()) {
                         .struct_ => |struct_| {
                             _ = struct_;
-                            try self.writer.writer.writeAll("capnp.Error!capnp.CompositeListReader(");
+                            try self.writer.writer.writeAll("capnp.CompositeListReader(");
                         },
                         else => {
-                            try self.writer.writer.writeAll("capnp.Error!capnp.ListReader(");
+                            try self.writer.writer.writeAll("capnp.ListReader(");
                         },
                     }
                     try self.zigType(try list.getElementType());
