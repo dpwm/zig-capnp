@@ -317,7 +317,7 @@ pub fn Transformer(comptime WriterType: type) type {
 // Just using one file for now. We will add this back in later
 const PathTable = struct {
     const PathMap = std.AutoHashMap(u64, []const u8);
-    const Error = Allocator.Error || capnp.Counter.Error;
+    const Error = std.fmt.BufPrintError || Allocator.Error || capnp.Counter.Error;
     pathMap: PathMap,
     nodeIdMap: NodeIdMap,
     allocator: Allocator,
@@ -328,7 +328,6 @@ const PathTable = struct {
     }
     pub fn update(self: *PathTable, name: []const u8, nodeId: u64) Error!void {
         const node = self.nodeIdMap.get(nodeId).?;
-        var it = (try node.getNestedNodes()).iter();
 
         var path: []const u8 = "";
         if (self.pathMap.get(node.getScopeId())) |parentName| {
@@ -338,9 +337,29 @@ const PathTable = struct {
         }
 
         try self.pathMap.put(node.getId(), path);
-
-        while (it.next()) |nestedNode| {
-            try self.update(try nestedNode.getName(), nestedNode.getId());
+        {
+            var it = (try node.getNestedNodes()).iter();
+            while (it.next()) |nestedNode| {
+                try self.update(try nestedNode.getName(), nestedNode.getId());
+            }
+        }
+        {
+            var buffer = std.mem.zeroes([128]u8);
+            switch (try node.which()) {
+                .struct_ => |struct_| {
+                    var field_it = (try struct_.getFields()).iter();
+                    while (field_it.next()) |field| {
+                        switch (try field.which()) {
+                            .group => |group| {
+                                const groupName = try std.fmt.bufPrint(&buffer, "_Field.{}", .{Capitalized.wrap(try field.getName())});
+                                try self.update(groupName, group.getId());
+                            },
+                            else => {},
+                        }
+                    }
+                },
+                else => {},
+            }
         }
     }
 
