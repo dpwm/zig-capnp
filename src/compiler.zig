@@ -196,10 +196,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.zigType(try slot.getType());
                 },
                 .group => |group| {
-                    const node = self.hashMap.get(group.getId()).?;
-                    const name = try node.getDisplayName();
-                    const pos = node.getDisplayNamePrefixLength();
-                    try self.writer.writer.print("_Tag.{s}", .{Capitalized.wrap(name[pos..])});
+                    try self.writer.writer.writeAll(self.pathTable.get(group.getId()).?);
                 },
                 else => {
                     unreachable;
