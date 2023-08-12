@@ -233,7 +233,11 @@ pub fn Transformer(comptime WriterType: type) type {
                         .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64 => {
                             try self.writer.writeLineC("return self.reader.readIntField(");
                             try self.zigType(typeR);
-                            try self.writer.writer.print(", {d});\n", .{slot.getOffset()});
+                            if (false) {
+                                try self.writer.writer.print(", {d}) ^ {d};\n", .{ slot.getOffset(), slot.getDefaultValue() });
+                            } else {
+                                try self.writer.writer.print(", {d});\n", .{slot.getOffset()});
+                            }
                         },
                         else => {},
                     }
