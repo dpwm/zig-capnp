@@ -281,6 +281,8 @@ pub fn Transformer(comptime WriterType: type) type {
                 .struct_ => |struct_| {
                     try self.writer.openStruct(name);
 
+                    try self.writer.printLine("const id: u64 = 0x{x};\n", .{node.getId()});
+
                     { // Nested Nodes
 
                         const nested = try node.getNestedNodes();
