@@ -99,6 +99,10 @@ pub const Field = struct {
             pub fn getType(self: @This()) !Type.Reader {
                 return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 2) };
             }
+
+            pub fn getOffset(self: @This()) u32 {
+                return self.reader.readIntField(u32, 1);
+            }
         };
         const Group = struct {
             reader: capnp.StructReader,

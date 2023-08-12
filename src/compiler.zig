@@ -204,18 +204,58 @@ pub fn Transformer(comptime WriterType: type) type {
             }
         }
 
+        pub fn print_getter_body(self: *Self, field: schema.Field.Reader) Error!void {
+            switch (try field.which()) {
+                .slot => |slot| {
+                    const typeR = try slot.getType();
+                    switch (try typeR.which()) {
+                        .void => {
+                            try self.writer.writeLine("return;");
+                        },
+                        .bool => {
+                            try self.writer.writeLine("unreachable;");
+                        },
+                        .float32 => {},
+                        .float64 => {},
+                        .text => {},
+                        .data => {},
+                        .list => |list| {
+                            _ = list;
+                        },
+                        .struct_ => |struct_| {
+                            _ = struct_;
+                        },
+                        .enum_ => |enum_| {
+                            _ = enum_;
+                        },
+                        .anyPointer => {},
+
+                        .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64 => {
+                            try self.writer.writeLineC("return self.reader.readIntField(");
+                            try self.zigType(typeR);
+                            try self.writer.writer.print(", {d});\n", .{slot.getOffset()});
+                        },
+                        else => {},
+                    }
+                },
+                else => {},
+            }
+        }
+
         pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
             if (field.getDiscriminantValue() != 65535) return;
             {
                 const name = try field.getName();
 
                 try self.writer.getterOpenArgs(name);
+                try self.writer.writer.writeAll("self: @This()");
                 try self.writer.functionDefCloseArgs();
             }
 
             try self.print_field_type(field);
 
             try self.writer.functionDefOpenBlock();
+            try self.print_getter_body(field);
             try self.writer.functionDefCloseBlock();
         }
 
