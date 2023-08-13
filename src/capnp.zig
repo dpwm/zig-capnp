@@ -181,6 +181,15 @@ pub const StructReader = struct {
         return (try self.readPtrField(ListReader(u8), ptrNo)).getString();
     }
 
+    pub fn readFloatField(self: StructReader, comptime T: type, offset: u32) T {
+        const U = comptime switch (T) {
+            f32 => u32,
+            f64 => u64,
+            else => unreachable,
+        };
+        return @bitCast(self.readIntField(U, offset));
+    }
+
     pub fn fromReadContext(context: ReadContext) Counter.Error!StructReader {
         var _context = context;
         const struct_ = (try _context.readPtr()).struct_;
