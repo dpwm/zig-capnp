@@ -62,7 +62,7 @@ pub fn CapnpWriter(comptime WriterType: type) type {
         }
 
         pub fn openStruct(self: *Self, name: anytype) Error!void {
-            try self.printLine("const {s} = struct {{", .{name});
+            try self.printLine("pub const {s} = struct {{", .{name});
             self.indent += 1;
         }
 
