@@ -290,7 +290,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             try self.writer.writeLine("return;");
                         },
                         .bool => {
-                            try self.writer.writeLine("unreachable;");
+                            try self.writer.printLine("return self.reader.readBoolField({});", .{slot.getOffset()});
                         },
                         .float32 => {
                             try self.writer.printLine(
@@ -339,6 +339,9 @@ pub fn Transformer(comptime WriterType: type) type {
                         },
                         else => {},
                     }
+                },
+                .group => {
+                    try self.writer.writeLine("return .{ .reader = self.reader };");
                 },
                 else => {},
             }
