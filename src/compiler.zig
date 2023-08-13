@@ -165,8 +165,47 @@ const ValueTypeFormatter = struct {
             .int8 => |x| {
                 try writer.print("{}", .{x});
             },
-
-            else => {},
+            .float32 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .float64 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .bool => |x| {
+                try writer.print("{}", .{x});
+            },
+            .void => {
+                try writer.writeAll("void{}");
+            },
+            .text => |x| {
+                try writer.writeAll(x);
+            },
+            .data => |x| {
+                _ = x;
+                unreachable;
+            },
+            .list => |x| {
+                _ = x;
+                unreachable;
+            },
+            .enum_ => |x| {
+                _ = x;
+                unreachable;
+            },
+            .struct_ => |x| {
+                _ = x;
+                unreachable;
+            },
+            .interface => {
+                unreachable;
+            },
+            .anyPointer => |x| {
+                _ = x;
+                unreachable;
+            },
+            ._other => {
+                unreachable;
+            },
         }
     }
 };
@@ -253,15 +292,40 @@ pub fn Transformer(comptime WriterType: type) type {
                         .bool => {
                             try self.writer.writeLine("unreachable;");
                         },
-                        .float32 => {},
-                        .float64 => {},
-                        .text => {},
-                        .data => {},
+                        .float32 => {
+                            try self.writer.printLine(
+                                "return self.reader.readFloatField(f32, {});",
+                                .{slot.getOffset()},
+                            );
+                        },
+                        .float64 => {
+                            try self.writer.printLine(
+                                "return self.reader.readFloatField(f64, {});",
+                                .{slot.getOffset()},
+                            );
+                        },
+                        .text, .data => {
+                            try self.writer.printLine(
+                                "return try self.reader.readStringField({});",
+                                .{slot.getOffset()},
+                            );
+                        },
                         .list => |list| {
                             _ = list;
+                            try self.writer.writeLineC("return try self.reader.readPtrField(");
+                            // try self.zigType((try list.getElementType()));
+                            try self.print_field_type(field);
+                            try self.writer.writer.print(", {});\n", .{slot.getOffset()});
                         },
                         .struct_ => |struct_| {
-                            _ = struct_;
+                            const nodeId = struct_.getId();
+                            try self.writer.printLine(
+                                "return try self.reader.readPtrField({s}.Reader, {});",
+                                .{
+                                    self.pathTable.get(nodeId).?,
+                                    slot.getOffset(),
+                                },
+                            );
                         },
                         .enum_ => |enum_| {
                             _ = enum_;
