@@ -101,7 +101,7 @@ pub const Value = struct {
             int8: i8,
             int16: i16,
             int32: i32,
-            int64: u64,
+            int64: i64,
             uint8: u8,
             uint16: u16,
             uint32: u32,
@@ -110,11 +110,12 @@ pub const Value = struct {
             float64: f64,
             text: []const u8,
             data: []const u8,
-            list: capnp.AnyPointer,
+            list: capnp.AnyPointerReader,
             enum_: u16,
-            struct_: capnp.AnyPointer,
+            struct_: capnp.AnyPointerReader,
             interface,
-            anyPointer: capnp.AnyPointer,
+            anyPointer: capnp.AnyPointerReader,
+            _other: u16,
         };
 
         pub fn which(self: @This()) capnp.Counter.Error!_Tag {
@@ -131,13 +132,13 @@ pub const Value = struct {
                 9 => _Tag{ .uint64 = self.reader.readIntField(u64, 1) },
                 10 => _Tag{ .float32 = self.reader.readFloatField(f32, 1) },
                 11 => _Tag{ .float64 = self.reader.readFloatField(f64, 1) },
-                12 => _Tag{ .text = self.reader.readStringField(0) },
-                13 => _Tag{ .data = self.reader.readStringField(0) },
-                14 => _Tag{ .list = self.reader.readPtrField(capnp.AnyPointerReader) },
+                12 => _Tag{ .text = try self.reader.readStringField(0) },
+                13 => _Tag{ .data = try self.reader.readStringField(0) },
+                14 => _Tag{ .list = try self.reader.readPtrField(capnp.AnyPointerReader, 0) },
                 15 => _Tag{ .enum_ = self.reader.readIntField(u16, 1) },
-                16 => _Tag{ .struct_ = self.reader.readPtrField(capnp.AnyPointerReader) },
+                16 => _Tag{ .struct_ = try self.reader.readPtrField(capnp.AnyPointerReader, 0) },
                 17 => _Tag{ .interface = void{} },
-                18 => _Tag{ .anyPointer = self.reader.readPtrField(capnp.AnyPointerReader) },
+                18 => _Tag{ .anyPointer = try self.reader.readPtrField(capnp.AnyPointerReader, 0) },
                 else => |n| .{ ._other = n },
             };
         }
@@ -157,8 +158,8 @@ pub const Field = struct {
                 return self.reader.readIntField(u32, 1);
             }
 
-            pub fn getDefaultValue(self: @This()) capnp.Error!Value {
-                _ = self;
+            pub fn getDefaultValue(self: @This()) capnp.Error!Value.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
             }
         };
         const Group = struct {

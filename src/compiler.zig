@@ -133,6 +133,44 @@ const Capitalized = struct {
     }
 };
 
+const ValueTypeFormatter = struct {
+    value: schema.Value.Reader._Tag,
+
+    pub fn format(value: ValueTypeFormatter, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        _ = fmt;
+
+        switch (value.value) {
+            .uint64 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .uint32 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .uint16 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .uint8 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .int64 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .int32 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .int16 => |x| {
+                try writer.print("{}", .{x});
+            },
+            .int8 => |x| {
+                try writer.print("{}", .{x});
+            },
+
+            else => {},
+        }
+    }
+};
+
 pub fn Transformer(comptime WriterType: type) type {
     return struct {
         const CapnpWriterType = CapnpWriter(WriterType);
@@ -233,11 +271,7 @@ pub fn Transformer(comptime WriterType: type) type {
                         .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64 => {
                             try self.writer.writeLineC("return self.reader.readIntField(");
                             try self.zigType(typeR);
-                            if (false) {
-                                try self.writer.writer.print(", {d}) ^ {d};\n", .{ slot.getOffset(), slot.getDefaultValue() });
-                            } else {
-                                try self.writer.writer.print(", {d});\n", .{slot.getOffset()});
-                            }
+                            try self.writer.writer.print(", {d}) ^ {d};\n", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
                         },
                         else => {},
                     }

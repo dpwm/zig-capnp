@@ -150,6 +150,21 @@ const BITS: usize = 1;
 const WORDS: usize = 1;
 const BYTES: usize = 1;
 
+pub const AnyPointerReader = struct {
+    context: ReadContext,
+    ptr: Ptr,
+
+    pub fn fromReadContext(context: ReadContext) Counter.Error!AnyPointerReader {
+        var _context = context;
+        const ptr = try _context.readPtr();
+
+        return AnyPointerReader{
+            .context = _context,
+            .ptr = ptr,
+        };
+    }
+};
+
 pub const StructReader = struct {
     context: ReadContext,
     dataWords: u16,
@@ -159,7 +174,7 @@ pub const StructReader = struct {
         return self.context.readIntWithBound(T, offset, self.dataWords);
     }
 
-    pub fn readBooleanField(self: StructReader, comptime offset: u32) bool {
+    pub fn readBoolField(self: StructReader, comptime offset: u32) bool {
         const bucket: u29 = comptime offset / 8;
         const shift: u3 = comptime offset % 8;
 
