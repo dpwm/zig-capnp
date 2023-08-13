@@ -159,6 +159,13 @@ pub const StructReader = struct {
         return self.context.readIntWithBound(T, offset, self.dataWords);
     }
 
+    pub fn readBooleanField(self: StructReader, comptime offset: u32) bool {
+        const bucket: u29 = comptime offset / 8;
+        const shift: u3 = comptime offset % 8;
+
+        return self.context.readIntWithBound(u8, bucket, self.dataWords) >> shift == 1;
+    }
+
     pub fn readPtrField(self: StructReader, comptime T: type, ptrNo: u16) Counter.Error!T {
         if (ptrNo < self.ptrWords) {
             std.debug.assert(ptrNo < self.ptrWords);
