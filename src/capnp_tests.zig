@@ -172,3 +172,42 @@ test "default values" {
     );
     // TODO: default for pointers. This is easier than it seems!
 }
+
+pub const BitsAndFloats = struct {
+    pub const Reader = struct {
+        reader: capnp.StructReader,
+
+        pub fn getFloat32(self: Reader) f32 {
+            return self.reader.readFloatField(f32, 0);
+        }
+
+        pub fn getFloat64(self: Reader) f64 {
+            return self.reader.readFloatField(f64, 1);
+        }
+
+        pub fn getBit(self: Reader) bool {
+            return self.reader.readBooleanField(32);
+        }
+    };
+};
+
+test "bits and floats" {
+    var file = try std.fs.cwd().openFile("capnp-tests/07_bits_and_floats.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    const s = try message.getRootStruct(BitsAndFloats);
+    try std.testing.expectEqual(
+        @as(f32, 3.141),
+        s.getFloat32(),
+    );
+    try std.testing.expectEqual(
+        @as(f64, 3.14159),
+        s.getFloat64(),
+    );
+    try std.testing.expectEqual(true, s.getBit());
+
+    // TODO: default for pointers. This is easier than it seems!
+}
