@@ -270,7 +270,14 @@ pub fn Transformer(comptime WriterType: type) type {
         pub fn print_field_type(self: *Self, field: schema.Field.Reader) Error!void {
             switch (try field.which()) {
                 .slot => |slot| {
-                    try self.zigType(try slot.getType());
+                    const type_ = try slot.getType();
+                    switch (try type_.which()) {
+                        .anyPointer, .struct_, .list => {
+                            try self.writer.writer.writeAll("capnp.Error!");
+                        },
+                        else => {},
+                    }
+                    try self.zigType(type_);
                 },
                 .group => |group| {
                     try self.writer.writer.writeAll(self.pathTable.get(group.getId()).?);
