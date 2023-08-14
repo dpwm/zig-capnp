@@ -281,6 +281,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 },
                 .group => |group| {
                     try self.writer.writer.writeAll(self.pathTable.get(group.getId()).?);
+                    try self.writer.writer.writeAll(".Reader");
                 },
                 else => {
                     unreachable;
@@ -323,7 +324,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             _ = list;
                             try writer.writeAll("try self.reader.readPtrField(");
                             // try self.zigType((try list.getElementType()));
-                            try self.print_field_type(field);
+                            try self.zigType(typeR);
                             try self.writer.writer.print(", {})", .{slot.getOffset()});
                         },
                         .struct_ => |struct_| {
