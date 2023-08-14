@@ -272,7 +272,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 .slot => |slot| {
                     const type_ = try slot.getType();
                     switch (try type_.which()) {
-                        .anyPointer, .struct_, .list => {
+                        .anyPointer, .struct_, .list, .text, .data => {
                             try self.writer.writer.writeAll("capnp.Error!");
                         },
                         else => {},
@@ -403,6 +403,20 @@ pub fn Transformer(comptime WriterType: type) type {
 
                     try self.writer.printLine("const id: u64 = 0x{x};\n", .{node.getId()});
 
+                    { // Group
+                        try self.writer.openStruct("_Group");
+                        var field_it = (try struct_.getFields()).iter();
+                        while (field_it.next()) |field| {
+                            switch (try field.which()) {
+                                .group => |group| {
+                                    try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
+                                },
+                                else => {},
+                            }
+                        }
+                        try self.writer.closeStruct();
+                    }
+
                     { // Nested Nodes
 
                         const nested = try node.getNestedNodes();
@@ -413,9 +427,7 @@ pub fn Transformer(comptime WriterType: type) type {
                         }
                     }
 
-                    {
-
-                        // Define the reader
+                    { // Define the reader
                         try self.writer.openStruct("Reader");
                         try self.writer.declareReader();
 
@@ -434,7 +446,8 @@ pub fn Transformer(comptime WriterType: type) type {
                             }
 
                             { // Write the tag union
-                                try self.writer.openStruct("_Tag");
+                                try self.writer.writeLine("const _Tag = union(enum) {");
+                                self.writer.indent += 1;
 
                                 for (0.., discriminantFields) |n, field| {
                                     _ = n;
