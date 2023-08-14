@@ -20,7 +20,7 @@ pub const Type = struct {
         pub const Struct = struct {
             reader: capnp.StructReader,
 
-            pub fn getId(self: @This()) u64 {
+            pub fn getTypeId(self: @This()) u64 {
                 return self.reader.readIntField(u64, 1);
             }
         };

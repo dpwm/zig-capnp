@@ -258,7 +258,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.writer.writer.writeAll(")");
                     return;
                 },
-                .struct_ => |struct_| self.pathTable.get(struct_.getId()).?,
+                .struct_ => |struct_| self.pathTable.get(struct_.getTypeId()).?,
                 .enum_ => |enum_| self.pathTable.get(enum_.getTypeId()).?,
                 .anyPointer => "capnp.AnyPointer",
 
@@ -334,7 +334,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             try self.writer.writer.print(", {})", .{slot.getOffset()});
                         },
                         .struct_ => |struct_| {
-                            const nodeId = struct_.getId();
+                            const nodeId = struct_.getTypeId();
                             try writer.print(
                                 "try self.reader.readPtrField({s}.Reader, {})",
                                 .{
