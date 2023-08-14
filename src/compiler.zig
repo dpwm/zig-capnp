@@ -203,7 +203,7 @@ const ValueTypeFormatter = struct {
                 _ = x;
                 unreachable;
             },
-            ._other => {
+            ._ => {
                 unreachable;
             },
         }
@@ -347,7 +347,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             _ = enum_;
                         },
                         .anyPointer => {
-                            try writer.print("try self.reader.readPtrField(capnp.AnyPointerReader, {})", .{
+                            try writer.print("try self.reader.readPtrField(capnp.AnyPointercapnp.AnyPointercapnp.AnyPointercapnp.AnyPointercapnp.AnyPointerReader, {})", .{
                                 slot.getOffset(),
                             });
                         },

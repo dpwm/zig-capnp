@@ -52,7 +52,7 @@ pub const Type = struct {
         struct_: Struct,
         interface: Interface,
         anyPointer: AnyPointer,
-        _other: u16,
+        _: u16,
 
         pub fn toString(self: Tag) []const u8 {
             return switch (self) {
@@ -85,7 +85,7 @@ pub const Type = struct {
                 16 => .{ .struct_ = .{ .reader = self.reader } },
                 17 => .{ .interface = .{ .reader = self.reader } },
                 18 => .{ .anyPointer = .{ .reader = self.reader } },
-                else => |n| .{ ._other = n },
+                else => |n| .{ ._ = n },
             };
         }
     };
@@ -115,7 +115,7 @@ pub const Value = struct {
             struct_: capnp.AnyPointerReader,
             interface,
             anyPointer: capnp.AnyPointerReader,
-            _other: u16,
+            _: u16,
         };
 
         pub fn which(self: @This()) capnp.Counter.Error!_Tag {
@@ -139,7 +139,7 @@ pub const Value = struct {
                 16 => _Tag{ .struct_ = try self.reader.readPtrField(capnp.AnyPointerReader, 0) },
                 17 => _Tag{ .interface = void{} },
                 18 => _Tag{ .anyPointer = try self.reader.readPtrField(capnp.AnyPointerReader, 0) },
-                else => |n| .{ ._other = n },
+                else => |n| .{ ._ = n },
             };
         }
     };
@@ -172,7 +172,7 @@ pub const Field = struct {
 
         slot: Slot,
         group: Group,
-        _other: u16,
+        _: u16,
     };
     pub const Reader = struct {
         reader: capnp.StructReader,
@@ -186,7 +186,7 @@ pub const Field = struct {
                     return Field._Tag{ .group = .{ .reader = self.reader } };
                 },
                 else => |n| {
-                    return Field._Tag{ ._other = n };
+                    return Field._Tag{ ._ = n };
                 },
             }
         }
@@ -228,7 +228,7 @@ pub const Node = struct {
         const_,
         interface,
         annotation,
-        _other: u16,
+        _: u16,
     };
 
     pub const NestedNode = struct {
@@ -269,7 +269,7 @@ pub const Node = struct {
                     return _Tag.annotation;
                 },
                 else => {
-                    return _Tag{ ._other = n };
+                    return _Tag{ ._ = n };
                 },
             }
         }
