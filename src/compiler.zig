@@ -280,7 +280,7 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.zigType(type_);
                 },
                 .group => |group| {
-                    try self.writer.writer.writeAll(self.pathTable.get(group.getId()).?);
+                    try self.writer.writer.writeAll(self.pathTable.get(group.getTypeId()).?);
                     try self.writer.writer.writeAll(".Reader");
                 },
                 else => {
@@ -410,7 +410,7 @@ pub fn Transformer(comptime WriterType: type) type {
                         while (field_it.next()) |field| {
                             switch (try field.which()) {
                                 .group => |group| {
-                                    try self.print_node(group.getId(), Capitalized.wrap(try field.getName()));
+                                    try self.print_node(group.getTypeId(), Capitalized.wrap(try field.getName()));
                                 },
                                 else => {},
                             }
@@ -553,7 +553,7 @@ const PathTable = struct {
                         switch (try field.which()) {
                             .group => |group| {
                                 const groupName = try std.fmt.bufPrint(&buffer, "_Group.{}", .{Capitalized.wrap(try field.getName())});
-                                try self.update(groupName, group.getId());
+                                try self.update(groupName, group.getTypeId());
                             },
                             else => {},
                         }

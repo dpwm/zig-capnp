@@ -165,7 +165,7 @@ pub const Field = struct {
         const Group = struct {
             reader: capnp.StructReader,
 
-            pub fn getId(self: @This()) u64 {
+            pub fn getTypeId(self: @This()) u64 {
                 return self.reader.readIntField(u64, 2);
             }
         };
