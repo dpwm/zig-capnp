@@ -282,45 +282,47 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn print_getter_body(self: *Self, field: schema.Field.Reader) Error!void {
+            const writer = self.writer.writer;
+
             switch (try field.which()) {
                 .slot => |slot| {
                     const typeR = try slot.getType();
                     switch (try typeR.which()) {
                         .void => {
-                            try self.writer.writeLine("return;");
+                            try writer.writeAll("void {}");
                         },
                         .bool => {
-                            try self.writer.printLine("return self.reader.readBoolField({});", .{slot.getOffset()});
+                            try writer.print("self.reader.readBoolField({})", .{slot.getOffset()});
                         },
                         .float32 => {
-                            try self.writer.printLine(
-                                "return self.reader.readFloatField(f32, {});",
+                            try writer.print(
+                                "self.reader.readFloatField(f32, {})",
                                 .{slot.getOffset()},
                             );
                         },
                         .float64 => {
-                            try self.writer.printLine(
-                                "return self.reader.readFloatField(f64, {});",
+                            try writer.print(
+                                "self.reader.readFloatField(f64, {})",
                                 .{slot.getOffset()},
                             );
                         },
                         .text, .data => {
-                            try self.writer.printLine(
-                                "return try self.reader.readStringField({});",
+                            try writer.print(
+                                "try self.reader.readStringField({})",
                                 .{slot.getOffset()},
                             );
                         },
                         .list => |list| {
                             _ = list;
-                            try self.writer.writeLineC("return try self.reader.readPtrField(");
+                            try writer.writeAll("try self.reader.readPtrField(");
                             // try self.zigType((try list.getElementType()));
                             try self.print_field_type(field);
-                            try self.writer.writer.print(", {});\n", .{slot.getOffset()});
+                            try self.writer.writer.print(", {})", .{slot.getOffset()});
                         },
                         .struct_ => |struct_| {
                             const nodeId = struct_.getId();
-                            try self.writer.printLine(
-                                "return try self.reader.readPtrField({s}.Reader, {});",
+                            try writer.print(
+                                "try self.reader.readPtrField({s}.Reader, {})",
                                 .{
                                     self.pathTable.get(nodeId).?,
                                     slot.getOffset(),
@@ -330,18 +332,22 @@ pub fn Transformer(comptime WriterType: type) type {
                         .enum_ => |enum_| {
                             _ = enum_;
                         },
-                        .anyPointer => {},
+                        .anyPointer => {
+                            try writer.print("try self.reader.readPtrField(capnp.AnyPointerReader, {})", .{
+                                slot.getOffset(),
+                            });
+                        },
 
                         .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64 => {
-                            try self.writer.writeLineC("return self.reader.readIntField(");
+                            try writer.writeAll("self.reader.readIntField(");
                             try self.zigType(typeR);
-                            try self.writer.writer.print(", {d}) ^ {d};\n", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
+                            try self.writer.writer.print(", {d}) ^ {d}", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
                         },
                         else => {},
                     }
                 },
                 .group => {
-                    try self.writer.writeLine("return .{ .reader = self.reader };");
+                    try writer.writeAll(".{ .reader = self.reader }");
                 },
                 else => {},
             }
@@ -360,7 +366,9 @@ pub fn Transformer(comptime WriterType: type) type {
             try self.print_field_type(field);
 
             try self.writer.functionDefOpenBlock();
+            try self.writer.writeLineC("return ");
             try self.print_getter_body(field);
+            try self.writer.writer.writeAll(";\n");
             try self.writer.functionDefCloseBlock();
         }
 
@@ -408,7 +416,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             var discriminantFields = try self.allocator.alloc(schema.Field.Reader, struct_.getDiscriminantCount());
                             defer self.allocator.free(discriminantFields);
 
-                            {
+                            { // Extract the discriminantFields
                                 var fields_it = (try struct_.getFields()).iter();
 
                                 while (fields_it.next()) |field| {
@@ -418,7 +426,7 @@ pub fn Transformer(comptime WriterType: type) type {
                                 }
                             }
 
-                            {
+                            { // Write the tag union
                                 try self.writer.openStruct("_Tag");
 
                                 for (0.., discriminantFields) |n, field| {
@@ -433,7 +441,37 @@ pub fn Transformer(comptime WriterType: type) type {
                                     try self.print_field_type(field);
                                     try self.writer.writer.writeAll(",\n");
                                 }
+
+                                try self.writer.writeLine("_: u16,");
                                 try self.writer.closeStruct();
+                            }
+
+                            { // Write the tag getter
+                                try self.writer.writeLine("pub fn which (self: @This()) capnp.Error!_Tag {");
+                                self.writer.indent += 1;
+                                try self.writer.printLine("return switch(self.reader.readIntField(u16, {})) {{", .{struct_.getDiscriminantOffset()});
+                                self.writer.indent += 1;
+
+                                for (0.., discriminantFields) |n, field| {
+                                    const fieldName = try field.getName();
+                                    try self.writer.printLineC("{} => _Tag{{ ", .{n});
+                                    if (self.is_reserved_name(fieldName)) {
+                                        try self.writer.writer.print(".{s}_ = ", .{fieldName});
+                                    } else {
+                                        try self.writer.writer.print(".{s} = ", .{fieldName});
+                                    }
+
+                                    try self.print_getter_body(field);
+
+                                    try self.writer.writer.writeAll(" },\n");
+                                }
+
+                                try self.writer.writeLine("else => |n| _Tag { ._ = n},");
+
+                                self.writer.indent -= 1;
+                                try self.writer.writeLine("};");
+                                self.writer.indent -= 1;
+                                try self.writer.writeLine("}");
                             }
                         }
                     }

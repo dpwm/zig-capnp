@@ -216,6 +216,10 @@ pub const Node = struct {
             pub fn getDiscriminantCount(self: @This()) u16 {
                 return self.reader.readIntField(u16, 240 / 16);
             }
+
+            pub fn getDiscriminantOffset(self: @This()) u32 {
+                return self.reader.readIntField(u32, 256 / 32);
+            }
         };
 
         file: @This().File,
