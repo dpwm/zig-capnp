@@ -5,9 +5,11 @@ Yet another capnproto code generator attempt for zig
 
 We are currently in early stages of development. This is not a useful project yet!
 
+The current status is that code generation is working for schema.capnp to the point we can replace our hand-written schema file
+
 - [x] Minimal reading
 - [x] Reading of capnproto
-- [ ] Code generation (Reader)
+- [x] Code generation (Reader)
 - [ ] Code generation (Builder)
 - [ ] Packed messages
 - [ ] RPC

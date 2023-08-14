@@ -189,8 +189,7 @@ const ValueTypeFormatter = struct {
                 unreachable;
             },
             .enum_ => |x| {
-                _ = x;
-                unreachable;
+                try writer.print("{}", .{x});
             },
             .struct_ => |x| {
                 _ = x;
@@ -345,6 +344,7 @@ pub fn Transformer(comptime WriterType: type) type {
                         },
                         .enum_ => |enum_| {
                             _ = enum_;
+                            try writer.print("@enumFromInt(self.reader.readIntField(u16, {}) ^ {})", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
                         },
                         .anyPointer => {
                             try writer.print("try self.reader.readPtrField(capnp.AnyPointerReader, {})", .{
@@ -513,6 +513,20 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.writer.closeStruct();
 
                     try self.writer.closeStruct();
+                },
+
+                .enum_ => |enum_| {
+                    try self.writer.printLine("pub const {s} = enum {{", .{name});
+                    self.writer.indent += 1;
+                    {
+                        var it = (try enum_.getEnumerants()).iter();
+                        while (it.next()) |x| {
+                            try self.writer.printLine("{s},", .{try x.getName()});
+                        }
+                    }
+
+                    self.writer.indent -= 1;
+                    try self.writer.writeLine("};");
                 },
 
                 else => {},
