@@ -260,7 +260,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 },
                 .struct_ => |struct_| self.pathTable.get(struct_.getTypeId()).?,
                 .enum_ => |enum_| self.pathTable.get(enum_.getTypeId()).?,
-                .anyPointer => "capnp.AnyPointer",
+                .anyPointer => "capnp.AnyPointerReader",
 
                 else => "anytype",
             };
