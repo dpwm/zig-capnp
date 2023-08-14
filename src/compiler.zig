@@ -333,12 +333,10 @@ pub fn Transformer(comptime WriterType: type) type {
                             try self.zigType(typeR);
                             try self.writer.writer.print(", {})", .{slot.getOffset()});
                         },
-                        .struct_ => |struct_| {
-                            const nodeId = struct_.getTypeId();
+                        .struct_ => {
                             try writer.print(
-                                "try self.reader.readPtrField({s}.Reader, {})",
+                                ".{{ .reader = try self.reader.readPtrField(capnp.StructReader, {}) }}",
                                 .{
-                                    self.pathTable.get(nodeId).?,
                                     slot.getOffset(),
                                 },
                             );
@@ -347,7 +345,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             _ = enum_;
                         },
                         .anyPointer => {
-                            try writer.print("try self.reader.readPtrField(capnp.AnyPointercapnp.AnyPointercapnp.AnyPointercapnp.AnyPointercapnp.AnyPointerReader, {})", .{
+                            try writer.print("try self.reader.readPtrField(capnp.AnyPointerReader, {})", .{
                                 slot.getOffset(),
                             });
                         },
