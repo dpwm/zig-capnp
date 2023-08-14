@@ -278,6 +278,12 @@ pub fn Transformer(comptime WriterType: type) type {
                         else => {},
                     }
                     try self.zigType(type_);
+                    switch (try type_.which()) {
+                        .struct_ => {
+                            try self.writer.writer.writeAll(".Reader");
+                        },
+                        else => {},
+                    }
                 },
                 .group => |group| {
                     try self.writer.writer.writeAll(self.pathTable.get(group.getTypeId()).?);
