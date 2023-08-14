@@ -453,7 +453,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             }
 
                             { // Write the tag union
-                                try self.writer.writeLine("const _Tag = union(enum) {");
+                                try self.writer.writeLine("pub const _Tag = union(enum) {");
                                 self.writer.indent += 1;
 
                                 for (0.., discriminantFields) |n, field| {
