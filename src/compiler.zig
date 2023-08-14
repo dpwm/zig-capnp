@@ -267,15 +267,17 @@ pub fn Transformer(comptime WriterType: type) type {
             try self.writer.writer.writeAll(typename);
         }
 
-        pub fn print_field_type(self: *Self, field: schema.Field.Reader) Error!void {
+        pub fn print_field_type(self: *Self, field: schema.Field.Reader, comptime with_error: bool) Error!void {
             switch (try field.which()) {
                 .slot => |slot| {
                     const type_ = try slot.getType();
-                    switch (try type_.which()) {
-                        .anyPointer, .struct_, .list, .text, .data => {
-                            try self.writer.writer.writeAll("capnp.Error!");
-                        },
-                        else => {},
+                    if (with_error) {
+                        switch (try type_.which()) {
+                            .anyPointer, .struct_, .list, .text, .data => {
+                                try self.writer.writer.writeAll("capnp.Error!");
+                            },
+                            else => {},
+                        }
                     }
                     try self.zigType(type_);
                     switch (try type_.which()) {
@@ -375,7 +377,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 try self.writer.functionDefCloseArgs();
             }
 
-            try self.print_field_type(field);
+            try self.print_field_type(field, true);
 
             try self.writer.functionDefOpenBlock();
             try self.writer.writeLineC("return ");
@@ -463,7 +465,7 @@ pub fn Transformer(comptime WriterType: type) type {
                                     } else {
                                         try self.writer.printLineC("{s}: ", .{fieldName});
                                     }
-                                    try self.print_field_type(field);
+                                    try self.print_field_type(field, false);
                                     try self.writer.writer.writeAll(",\n");
                                 }
 
