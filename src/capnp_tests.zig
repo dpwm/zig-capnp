@@ -54,8 +54,32 @@ test "simple struct unpacking" {
 }
 
 test "simple struct packing" {
-    var message = try capnp.MessageBuilder.init(std.testing.allocator);
-    defer message.deinit();
+    var builder = capnp.MessageBuilder{};
+    try builder.init(std.testing.allocator);
+    {
+        const allocation = try builder.alloc(0, 2);
+        const ptr = capnp.Ptr{
+            .struct_ = .{
+                .dataWords = 1,
+                .ptrWords = 0,
+                .offsetWords = 0,
+            },
+        };
+        std.mem.writeIntLittle(u64, allocation.data[0..8], ptr.to_u64());
+        std.mem.writeIntLittle(i16, allocation.data[8..10], 2023);
+        std.mem.writeIntLittle(u8, allocation.data[10..11], 7);
+        std.mem.writeIntLittle(u8, allocation.data[11..12], 14);
+
+        var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_date_20230714.bin", .{});
+        defer file.close();
+
+        const reference = try file.readToEndAlloc(std.testing.allocator, 10000);
+        defer std.testing.allocator.free(reference);
+        try std.testing.expectEqualSlices(u8, reference[8..], allocation.data);
+    }
+    {}
+
+    defer builder.deinit();
 }
 
 test "simple struct unpacking (negative year)" {
@@ -191,7 +215,7 @@ pub const BitsAndFloats = struct {
         }
 
         pub fn getBit(self: Reader) bool {
-            return self.reader.readBooleanField(32);
+            return self.reader.readBoolField(32);
         }
     };
 };

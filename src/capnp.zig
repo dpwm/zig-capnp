@@ -3,26 +3,26 @@ const testing = std.testing;
 const Allocator = std.mem.Allocator;
 
 pub const Ptr = union(enum) {
-    const Struct = packed struct(u64) {
-        type: u2,
+    pub const Struct = packed struct(u64) {
+        type: u2 = 0,
         offsetWords: i30,
         dataWords: u16,
         ptrWords: u16,
     };
-    const List = packed struct(u64) {
-        type: u2,
+    pub const List = packed struct(u64) {
+        type: u2 = 1,
         offsetWords: i30,
         elementSize: u3,
         elementsOrWords: u29,
     };
-    const InterSegment = packed struct(u64) {
-        type: u2,
+    pub const InterSegment = packed struct(u64) {
+        type: u2 = 2,
         double: bool,
         offset: u29,
         segment: u32,
     };
-    const Capability = packed struct(u64) {
-        type: u2,
+    pub const Capability = packed struct(u64) {
+        type: u2 = 3,
         _: u30,
         index: u32,
     };
@@ -46,6 +46,32 @@ pub const Ptr = union(enum) {
             2 => Ptr{ .inter_segment = @bitCast(ptr) },
             3 => Ptr{ .capability = @bitCast(ptr) },
         };
+    }
+
+    pub fn to_u64(ptr: Ptr) u64 {
+        var ptr_ = ptr;
+
+        switch (ptr_) {
+            .struct_ => |*struct_| {
+                struct_.type = 0;
+                return @bitCast(struct_.*);
+            },
+            .list => |*list| {
+                list.type = 1;
+                return @bitCast(list.*);
+            },
+            .inter_segment => |*inter_segment| {
+                inter_segment.type = 2;
+                return @bitCast(inter_segment.*);
+            },
+            .capability => |*capability| {
+                capability.type = 3;
+                return @bitCast(capability.*);
+            },
+            .null => {
+                return 0;
+            },
+        }
     }
 };
 
