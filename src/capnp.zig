@@ -420,11 +420,10 @@ pub const MessageBuilder = struct {
         }
 
         pub fn alloc(self: *Segment, wordCount: u29) ?Segment.Allocation {
-            const data = self.data[self.words << 3 .. (self.words + wordCount) << 3];
-            if (data.len == wordCount << 3) {
-                const out = .{ .offsetWords = self.words, .data = data };
-                self.words += wordCount;
-                return out;
+            const toBytes = (self.words + wordCount) << 3;
+            if (self.data.len >= toBytes) {
+                defer self.words += wordCount;
+                return .{ .offsetWords = self.words, .data = self.data[self.words << 3 .. toBytes] };
             } else {
                 return null;
             }
@@ -442,12 +441,13 @@ pub const MessageBuilder = struct {
 
         self.allocator = allocator;
         try self.segments[0].init(allocator, self.allocWords);
-        self.allocWords *= 2;
+        self.allocWords <<= 1;
         self.segmentCount = 1;
     }
 
-    const Error = error{
+    const Error = Allocator.Error || error{
         segment_limit_exceeded,
+        invalid_segment,
     };
 
     const Allocation = struct {
@@ -456,14 +456,20 @@ pub const MessageBuilder = struct {
         data: []u8,
     };
 
-    pub fn alloc(self: *MessageBuilder, words: u29, segment: u32) MessageBuilder.Error!Allocation {
-        _ = words;
-        if (self.segments[segment].alloc()) |allocation| {
-            _ = allocation;
-        } else {
-            if (self.segmentCount == MAX_SEGMENT) {
-                return MessageBuilder.Error.segment_limit_exceeded;
-            } else {}
+    pub fn alloc(self: *MessageBuilder, segment: u32, wordCount: u29) MessageBuilder.Error!Allocation {
+        if (segment >= self.segmentCount) return MessageBuilder.Error.invalid_segment;
+        if (self.segments[segment].alloc(wordCount)) |allocation| {
+            return .{ .segment = segment, .offsetWords = allocation.offsetWords, .data = allocation.data };
+        } else { // we don’t have enough space, so allocate a new segment
+            if (self.segmentCount == MAX_SEGMENT) return MessageBuilder.Error.segment_limit_exceeded;
+            const allocWords = @max(self.allocWords, wordCount);
+            try self.segments[self.segmentCount].init(self.allocator, allocWords);
+            const x = self.segments[self.segmentCount].alloc(wordCount).?;
+
+            defer self.allocWords <<= 1;
+            defer self.segmentCount += 1;
+
+            return .{ .segment = self.segmentCount, .offsetWords = x.offsetWords, .data = x.data };
         }
     }
 
@@ -479,8 +485,15 @@ test "test MessageBuilder" {
     try builder.init(std.testing.allocator);
     defer builder.deinit();
 
-    var x = builder.segments[0].alloc(1024);
+    {
+        const x = try builder.alloc(0, 1024);
+        try testing.expectEqual(@as(u32, 0), x.offsetWords);
+        try testing.expectEqual(@as(u32, 0), x.segment);
+    }
 
-    try std.testing.expect(x != null);
-    try std.testing.expectEqual(@as(usize, 8192), x.?.data.len);
+    {
+        const x = try builder.alloc(0, 102400);
+        try testing.expectEqual(@as(u32, 0), x.offsetWords);
+        try testing.expectEqual(@as(u32, 1), x.segment);
+    }
 }
