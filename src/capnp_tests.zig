@@ -53,6 +53,11 @@ test "simple struct unpacking" {
     try std.testing.expectEqual(@as(u8, 14), s.getDay());
 }
 
+test "simple struct packing" {
+    var message = try capnp.MessageBuilder.init(std.testing.allocator);
+    defer message.deinit();
+}
+
 test "simple struct unpacking (negative year)" {
     var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_datem_20230714.bin", .{});
     defer file.close();

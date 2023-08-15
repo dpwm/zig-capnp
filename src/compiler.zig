@@ -645,3 +645,54 @@ test "test2" {
         }
     }
 }
+
+pub fn main() !void {
+
+    //var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
+    var file = std.io.getStdIn();
+
+    defer file.close();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
+    var message = try capnp.Message.fromFile(file, allocator);
+
+    const s = try message.getRootStruct(schema.CodeGeneratorRequest);
+    var hashMap = std.AutoHashMap(u64, schema.Node.Reader).init(allocator);
+    defer hashMap.deinit();
+
+    try populateLookupTable(&hashMap, s);
+    var out = capnpWriter(std.io.getStdOut().writer());
+    var reserved_names = std.StringHashMap(void).init(allocator);
+    defer reserved_names.deinit();
+    try reserved_names.put("struct", {});
+    try reserved_names.put("enum", {});
+    try reserved_names.put("const", {});
+
+    var pathTable = PathTable.init(hashMap);
+    defer pathTable.deinit();
+
+    {
+        var it = (try s.getRequestedFiles()).iter();
+        while (it.next()) |requestedFile| {
+            try pathTable.updateFile(requestedFile);
+        }
+    }
+
+    var transformer = Transformer(@TypeOf(out.writer)){
+        .hashMap = hashMap,
+        .writer = out,
+        .allocator = allocator,
+        .reserved_names = reserved_names,
+        .pathTable = pathTable,
+    };
+
+    {
+        var it = (try s.getRequestedFiles()).iter();
+        while (it.next()) |requestedFile| {
+            try transformer.print_file(requestedFile);
+        }
+    }
+}
