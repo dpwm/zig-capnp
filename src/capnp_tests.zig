@@ -3,6 +3,11 @@ const capnp = @import("capnp.zig");
 const testing = std.testing;
 
 pub const Date = struct {
+    pub const _Metadata = struct {
+        pub const dataWords = 1;
+        pub const ptrWords = 0;
+    };
+
     pub const Reader = struct {
         reader: capnp.StructReader,
 
@@ -16,6 +21,34 @@ pub const Date = struct {
 
         pub fn getDay(self: Reader) u8 {
             return self.reader.readIntField(u8, 3);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn getYear(self: Builder) i16 {
+            return self.builder.readIntField(i16, 0);
+        }
+
+        pub fn getMonth(self: Builder) u8 {
+            return self.builder.readIntField(u8, 2);
+        }
+
+        pub fn getDay(self: Builder) u8 {
+            return self.builder.readIntField(u8, 3);
+        }
+
+        pub fn setYear(self: Builder, value: i16) void {
+            return self.builder.writeIntField(i16, 0, value);
+        }
+
+        pub fn setMonth(self: Builder, value: u8) u8 {
+            return self.builder.writeIntField(u8, 2, value);
+        }
+
+        pub fn setDay(self: Builder, value: u8) u8 {
+            return self.builder.writeIntField(u8, 3, value);
         }
     };
 };
@@ -53,7 +86,7 @@ test "simple struct unpacking" {
     try std.testing.expectEqual(@as(u8, 14), s.getDay());
 }
 
-test "simple struct packing" {
+test "simple struct packing (manual)" {
     var builder = capnp.MessageBuilder{};
     try builder.init(std.testing.allocator);
     {
@@ -80,6 +113,36 @@ test "simple struct packing" {
     {}
 
     defer builder.deinit();
+}
+
+test "simple struct packing" {
+    var builder = capnp.MessageBuilder{};
+    try builder.init(std.testing.allocator);
+    defer builder.deinit();
+
+    builder.initRootStruct(Date);
+    {
+        const allocation = try builder.alloc(0, 2);
+        const ptr = capnp.Ptr{
+            .struct_ = .{
+                .dataWords = 1,
+                .ptrWords = 0,
+                .offsetWords = 0,
+            },
+        };
+        std.mem.writeIntLittle(u64, allocation.data[0..8], ptr.to_u64());
+        std.mem.writeIntLittle(i16, allocation.data[8..10], 2023);
+        std.mem.writeIntLittle(u8, allocation.data[10..11], 7);
+        std.mem.writeIntLittle(u8, allocation.data[11..12], 14);
+
+        var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_date_20230714.bin", .{});
+        defer file.close();
+
+        const reference = try file.readToEndAlloc(std.testing.allocator, 10000);
+        defer std.testing.allocator.free(reference);
+        try std.testing.expectEqualSlices(u8, reference[8..], allocation.data);
+    }
+    {}
 }
 
 test "simple struct unpacking (negative year)" {

@@ -244,6 +244,36 @@ pub const StructReader = struct {
     }
 };
 
+pub const BuildContext = struct {
+    segments: *[][]u8,
+    segment: u32,
+    offsetWords: u29,
+
+    pub fn offsetBytes(self: ReadContext) u32 {
+        // Zig’s slices do bounds checking for us.
+        return self.offsetWords * 8;
+    }
+
+    pub fn readInt(self: ReadContext, comptime T: type, offset: u32) T {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]);
+    }
+};
+
+pub const StructBuilder = struct {
+    context: BuildContext,
+    dataWords: u16,
+    ptrWords: u16,
+
+    pub fn readIntField(self: StructBuilder, comptime T: type, offset: u32) T {
+        return self.context.readInt(T, offset, self.dataWords);
+    }
+
+    pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
+        self.context.writeInt(T, offset, value);
+    }
+};
+
 pub fn ListReader(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -476,13 +506,7 @@ pub const MessageBuilder = struct {
         invalid_segment,
     };
 
-    const Allocation = struct {
-        segment: u32,
-        offsetWords: u32,
-        data: []u8,
-    };
-
-    pub fn alloc(self: *MessageBuilder, segment: u32, wordCount: u29) MessageBuilder.Error!Allocation {
+    pub fn alloc(self: *MessageBuilder, segment: u32, wordCount: u29) MessageBuilder.Error!BuildContext {
         if (segment >= self.segmentCount) return MessageBuilder.Error.invalid_segment;
         if (self.segments[segment].alloc(wordCount)) |allocation| {
             return .{ .segment = segment, .offsetWords = allocation.offsetWords, .data = allocation.data };
@@ -492,10 +516,10 @@ pub const MessageBuilder = struct {
             try self.segments[self.segmentCount].init(self.allocator, allocWords);
             const x = self.segments[self.segmentCount].alloc(wordCount).?;
 
-            defer self.allocWords <<= 1;
-            defer self.segmentCount += 1;
+            self.allocWords <<= 1;
+            self.segmentCount += 1;
 
-            return .{ .segment = self.segmentCount, .offsetWords = x.offsetWords, .data = x.data };
+            return .{ .builder = self, .segment = self.segmentCount, .offsetWords = x.offsetWords, .data = x.data };
         }
     }
 
@@ -503,6 +527,19 @@ pub const MessageBuilder = struct {
         for (self.segments) |x| {
             x.deinit(self.allocator);
         }
+    }
+
+    pub fn getSegments(self: MessageBuilder) []Segment {
+        return self.segments[0..self.segmentCount];
+    }
+
+    pub fn initRootStruct(self: *MessageBuilder, comptime T: type) MessageBuilder.Error!void {
+        const ptrWords = T._Metadata.ptrWords;
+
+        const dataWords = T._Metadata.dataWords;
+
+        const allocation = try self.alloc(0, 1 + dataWords + ptrWords);
+        _ = allocation;
     }
 };
 
