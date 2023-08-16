@@ -244,36 +244,6 @@ pub const StructReader = struct {
     }
 };
 
-pub const BuildContext = struct {
-    segments: *[][]u8,
-    segment: u32,
-    offsetWords: u29,
-
-    pub fn offsetBytes(self: ReadContext) u32 {
-        // Zig’s slices do bounds checking for us.
-        return self.offsetWords * 8;
-    }
-
-    pub fn readInt(self: ReadContext, comptime T: type, offset: u32) T {
-        const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]);
-    }
-};
-
-pub const StructBuilder = struct {
-    context: BuildContext,
-    dataWords: u16,
-    ptrWords: u16,
-
-    pub fn readIntField(self: StructBuilder, comptime T: type, offset: u32) T {
-        return self.context.readInt(T, offset, self.dataWords);
-    }
-
-    pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
-        self.context.writeInt(T, offset, value);
-    }
-};
-
 pub fn ListReader(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -456,107 +426,33 @@ pub const Message = struct {
     }
 };
 
+pub const BuildContext = struct {
+    segments: *[][]u8,
+    segment: u32,
+    offsetWords: u32,
+};
+
 pub const MessageBuilder = struct {
-    const Segment = struct {
-        data: []u8,
-        words: u32,
+    allocator: Allocator = std.heap.page_allocator,
+    allocBytes: u32 = std.mem.page_size,
+    segmentStore: [16][]u8 = std.mem.zeroes([16][]u8),
+    segments: [][]u8 = std.mem.zeroes([][]u8),
 
-        const Allocation = struct {
-            offsetWords: u32,
-            data: []u8,
-        };
-
-        pub fn init(self: *Segment, allocator: Allocator, wordCount: u29) Allocator.Error!void {
-            self.* = .{ .words = 0, .data = try allocator.alloc(u8, wordCount << 3) };
-            @memset(self.data, 0); // Zero the memory.
-        }
-
-        pub fn deinit(self: Segment, allocator: Allocator) void {
-            allocator.free(self.data);
-        }
-
-        pub fn alloc(self: *Segment, wordCount: u29) ?Segment.Allocation {
-            const toBytes = (self.words + wordCount) << 3;
-            if (self.data.len >= toBytes) {
-                defer self.words += wordCount;
-                return .{ .offsetWords = self.words, .data = self.data[self.words << 3 .. toBytes] };
-            } else {
-                return null;
-            }
-        }
-    };
-
-    allocWords: u29 = 16384,
-    allocator: Allocator = undefined,
-    segments: [16]Segment = std.mem.zeroes([16]Segment),
-    segmentCount: u4 = 0,
-    const MAX_SEGMENT: u4 = 15;
-
-    pub fn init(self: *MessageBuilder, allocator: Allocator) Allocator.Error!void {
-        if (self.segmentCount != 0) return;
-
-        self.allocator = allocator;
-        try self.segments[0].init(allocator, self.allocWords);
-        self.allocWords <<= 1;
-        self.segmentCount = 1;
-    }
-
-    const Error = Allocator.Error || error{
-        segment_limit_exceeded,
-        invalid_segment,
-    };
-
-    pub fn alloc(self: *MessageBuilder, segment: u32, wordCount: u29) MessageBuilder.Error!BuildContext {
-        if (segment >= self.segmentCount) return MessageBuilder.Error.invalid_segment;
-        if (self.segments[segment].alloc(wordCount)) |allocation| {
-            return .{ .segment = segment, .offsetWords = allocation.offsetWords, .data = allocation.data };
-        } else { // we don’t have enough space, so allocate a new segment
-            if (self.segmentCount == MAX_SEGMENT) return MessageBuilder.Error.segment_limit_exceeded;
-            const allocWords = @max(self.allocWords, wordCount);
-            try self.segments[self.segmentCount].init(self.allocator, allocWords);
-            const x = self.segments[self.segmentCount].alloc(wordCount).?;
-
-            self.allocWords <<= 1;
-            self.segmentCount += 1;
-
-            return .{ .builder = self, .segment = self.segmentCount, .offsetWords = x.offsetWords, .data = x.data };
-        }
+    pub fn init(self: *MessageBuilder) Allocator.Error!void {
+        self.segmentStore[0] = try self.allocator.alloc(u8, self.allocBytes);
+        defer self.allocBytes <<= 2;
+        self.segments = self.segmentStore[0..1];
     }
 
     pub fn deinit(self: *MessageBuilder) void {
-        for (self.segments) |x| {
-            x.deinit(self.allocator);
+        for (self.segments) |segment| {
+            self.allocator.free(segment);
         }
-    }
-
-    pub fn getSegments(self: MessageBuilder) []Segment {
-        return self.segments[0..self.segmentCount];
-    }
-
-    pub fn initRootStruct(self: *MessageBuilder, comptime T: type) MessageBuilder.Error!void {
-        const ptrWords = T._Metadata.ptrWords;
-
-        const dataWords = T._Metadata.dataWords;
-
-        const allocation = try self.alloc(0, 1 + dataWords + ptrWords);
-        _ = allocation;
     }
 };
 
 test "test MessageBuilder" {
-    var builder = MessageBuilder{};
-    try builder.init(std.testing.allocator);
+    var builder = MessageBuilder{ .allocator = std.testing.allocator };
+    try builder.init();
     defer builder.deinit();
-
-    {
-        const x = try builder.alloc(0, 1024);
-        try testing.expectEqual(@as(u32, 0), x.offsetWords);
-        try testing.expectEqual(@as(u32, 0), x.segment);
-    }
-
-    {
-        const x = try builder.alloc(0, 102400);
-        try testing.expectEqual(@as(u32, 0), x.offsetWords);
-        try testing.expectEqual(@as(u32, 1), x.segment);
-    }
 }
