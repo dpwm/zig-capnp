@@ -470,14 +470,24 @@ pub const MessageBuilder = struct {
         if (segment < self.segments.len and self.segments[segment].len + bytes < self.segmentLimit(segment)) {
             return self.allocAssert(segment, bytes);
         } else {
+            var best_ix: u32 = 0;
+            var best_spare: i64 = -1;
+
             for (self.segments, 0..) |seg, n_| {
                 const n: u32 = @intCast(n_);
-                if (n != segment and seg.len + bytes < self.segmentLimit(n)) {
-                    return self.allocAssert(n, bytes);
+                if (n == segment) continue;
+                const spare: i64 = self.segmentLimit(n) - (@as(u32, @intCast(seg.len)) + bytes);
+                if (spare > best_spare) {
+                    best_spare = spare;
+                    best_ix = n;
                 }
-            } else {
+            }
+
+            if (best_spare < 0) {
                 const seg = try self.expandAssert(bytes);
                 return self.allocAssert(seg, bytes);
+            } else {
+                return self.allocAssert(best_ix, bytes);
             }
         }
     }
