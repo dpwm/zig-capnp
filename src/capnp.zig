@@ -440,25 +440,45 @@ pub const MessageBuilder = struct {
     segments: [][]u8 = std.mem.zeroes([][]u8),
 
     pub fn init(self: *MessageBuilder) Allocator.Error!void {
-        self.segmentStore[0] = try self.allocator.alloc(u8, @as(u32, 1) << self.allocShift);
-        self.segmentStore[0].len = 0;
-        self.segmentShifts[0] = self.allocShift;
-        defer self.allocShift += 1;
-        self.segments = self.segmentStore[0..1];
+        _ = try self.expandAssert(1);
     }
 
     inline fn segmentLimit(self: MessageBuilder, segment: u32) u32 {
         return (@as(u32, 1)) << self.segmentShifts[segment];
     }
 
+    pub fn expandAssert(self: *MessageBuilder, min_bytes: u32) Allocator.Error!u32 {
+        const n: u32 = @intCast(self.segments.len);
+        if (n == self.segmentShifts.len) return Allocator.Error.OutOfMemory;
+        const allocShift: u5 = @max(self.allocShift, @as(u5, @intCast(std.math.log2_int_ceil(u32, min_bytes))));
+        const allocBytes: u32 = @as(u32, 1) << allocShift;
+        self.segmentStore[n] = try self.allocator.alloc(u8, allocBytes);
+        self.segmentStore[n].len = 0;
+        self.segmentShifts[n] = allocShift;
+        self.allocShift += 1;
+        self.segments = self.segmentStore[0 .. n + 1];
+        return n;
+    }
+
+    pub fn allocAssert(self: *MessageBuilder, segment: u32, bytes: u32) BuildContext {
+        defer self.segments[segment].len += bytes;
+        return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments[segment].len >> 3) };
+    }
     /// try to allocate in the given segment.
     pub fn alloc(self: *MessageBuilder, segment: u32, words: u32) Allocator.Error!BuildContext {
         const bytes: u32 = words << 3;
         if (segment < self.segments.len and self.segments[segment].len + bytes < self.segmentLimit(segment)) {
-            defer self.segments[segment].len += bytes;
-            return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments[segment].len >> 3) };
+            return self.allocAssert(segment, bytes);
         } else {
-            unreachable;
+            for (self.segments, 0..) |seg, n_| {
+                const n: u32 = @intCast(n_);
+                if (n != segment and seg.len + bytes < self.segmentLimit(n)) {
+                    return self.allocAssert(n, bytes);
+                }
+            } else {
+                const seg = try self.expandAssert(bytes);
+                return self.allocAssert(seg, bytes);
+            }
         }
     }
 
@@ -488,5 +508,12 @@ test "test MessageBuilder" {
         try std.testing.expectEqual(@as(u32, 0), context.segment);
         try std.testing.expectEqual(@as(u32, 1024), context.offsetWords);
         try std.testing.expectEqual(@as(usize, 16384), context.segments.*[0].len);
+    }
+
+    {
+        const context = try builder.alloc(0, 8192);
+        try std.testing.expectEqual(@as(u32, 1), context.segment);
+        try std.testing.expectEqual(@as(u32, 0), context.offsetWords);
+        try std.testing.expectEqual(@as(usize, 65536), context.segments.*[1].len);
     }
 }
