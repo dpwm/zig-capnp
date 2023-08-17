@@ -456,7 +456,7 @@ pub const MessageBuilder = struct {
         const bytes: u32 = words << 3;
         if (segment < self.segments.len and self.segments[segment].len + bytes < self.segmentLimit(segment)) {
             defer self.segments[segment].len += bytes;
-            return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments.len >> 3) };
+            return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments[segment].len >> 3) };
         } else {
             unreachable;
         }
@@ -476,8 +476,17 @@ test "test MessageBuilder" {
     defer builder.deinit();
     try std.testing.expectEqual(@as(usize, 1), builder.segments.len);
 
-    const context = try builder.alloc(0, 1024);
-    try std.testing.expectEqual(@as(u32, 0), context.segment);
-    try std.testing.expectEqual(@as(u32, 0), context.offsetWords);
-    try std.testing.expectEqual(@as(usize, 8192), context.segments.*[0].len);
+    {
+        const context = try builder.alloc(0, 1024);
+        try std.testing.expectEqual(@as(u32, 0), context.segment);
+        try std.testing.expectEqual(@as(u32, 0), context.offsetWords);
+        try std.testing.expectEqual(@as(usize, 8192), context.segments.*[0].len);
+    }
+
+    {
+        const context = try builder.alloc(0, 1024);
+        try std.testing.expectEqual(@as(u32, 0), context.segment);
+        try std.testing.expectEqual(@as(u32, 1024), context.offsetWords);
+        try std.testing.expectEqual(@as(usize, 16384), context.segments.*[0].len);
+    }
 }
