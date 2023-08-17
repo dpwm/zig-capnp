@@ -427,9 +427,44 @@ pub const Message = struct {
 };
 
 pub const BuildContext = struct {
+    builder: *MessageBuilder,
     segments: *[][]u8,
     segment: u32,
     offsetWords: u32,
+
+    pub fn readIntWithBound(self: BuildContext, comptime T: type, offset: u32, boundWords: u29) T {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)]) else 0;
+    }
+
+    pub fn readInt(self: BuildContext, comptime T: type, offset: u32) T {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return std.mem.readIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)]);
+    }
+
+    pub fn writeInt(self: BuildContext, comptime T: type, offset: u32, value: T) void {
+        const pos = self.offsetBytes() + @sizeOf(T) * offset;
+        return std.mem.writeIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)], value);
+    }
+
+    pub fn writePtr(self: *BuildContext, ptr: Ptr) void {
+        self.writeInt(u64, 0, ptr.to_u64());
+    }
+
+    pub fn allocStruct(self: *BuildContext, ptrWords: u16, dataWords: u16) Allocator.Error!StructBuilder {
+        const builderCtx = try self.builder.alloc(self.segment, ptrWords + dataWords);
+        return StructBuilder{ .context = builderCtx, .ptrWords = ptrWords, .dataWords = dataWords };
+    }
+};
+
+pub const StructBuilder = struct {
+    context: BuildContext,
+    dataWords: u16,
+    ptrWords: u16,
+
+    pub fn readIntField(self: StructReader, comptime T: type, offset: u32) T {
+        return self.context.readIntWithBound(T, offset, self.dataWords);
+    }
 };
 
 pub const MessageBuilder = struct {
@@ -462,7 +497,9 @@ pub const MessageBuilder = struct {
 
     pub fn allocAssert(self: *MessageBuilder, segment: u32, bytes: u32) BuildContext {
         defer self.segments[segment].len += bytes;
-        return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments[segment].len >> 3) };
+        const seg = self.segments[segment];
+        @memset(seg.ptr[seg.len .. seg.len + bytes], 0);
+        return .{ .builder = self, .segments = &self.segments, .segment = segment, .offsetWords = @intCast(seg.len >> 3) };
     }
     /// try to allocate in the given segment.
     pub fn alloc(self: *MessageBuilder, segment: u32, words: u32) Allocator.Error!BuildContext {
@@ -497,6 +534,11 @@ pub const MessageBuilder = struct {
             segment.len = self.segmentLimit(@as(u32, @intCast(n)));
             self.allocator.free(segment.*);
         }
+    }
+
+    pub fn initRootStruct(self: *MessageBuilder, comptime T: type) Allocator.Error!T.Builder {
+        var ctx = try self.alloc(0, 1);
+        return T.Builder{ .builder = try ctx.allocStruct(T._Metadata.dataWords, T._Metadata.ptrWords) };
     }
 };
 
