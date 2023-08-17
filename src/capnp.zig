@@ -521,9 +521,16 @@ test "test MessageBuilder" {
     }
 
     {
-        const context = try builder.alloc(0, 8192);
+        const context = try builder.alloc(0, 8192 * 2);
         try std.testing.expectEqual(@as(u32, 1), context.segment);
         try std.testing.expectEqual(@as(u32, 0), context.offsetWords);
-        try std.testing.expectEqual(@as(usize, 65536), context.segments.*[1].len);
+        try std.testing.expectEqual(@as(usize, 8192 * 2 * 8), context.segments.*[1].len);
+    }
+
+    {
+        const context = try builder.alloc(1, 1024);
+        try std.testing.expectEqual(@as(u32, 0), context.segment);
+        try std.testing.expectEqual(@as(u32, 2048), context.offsetWords);
+        try std.testing.expectEqual(@as(usize, 8192 * 3), context.segments.*[0].len);
     }
 }
