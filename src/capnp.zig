@@ -434,19 +434,38 @@ pub const BuildContext = struct {
 
 pub const MessageBuilder = struct {
     allocator: Allocator = std.heap.page_allocator,
-    allocBytes: u32 = std.mem.page_size,
+    allocShift: u5 = 16, // For consistency.
     segmentStore: [16][]u8 = std.mem.zeroes([16][]u8),
+    segmentShifts: [16]u5 = std.mem.zeroes([16]u5),
     segments: [][]u8 = std.mem.zeroes([][]u8),
 
     pub fn init(self: *MessageBuilder) Allocator.Error!void {
-        self.segmentStore[0] = try self.allocator.alloc(u8, self.allocBytes);
-        defer self.allocBytes <<= 2;
+        self.segmentStore[0] = try self.allocator.alloc(u8, @as(u32, 1) << self.allocShift);
+        self.segmentStore[0].len = 0;
+        self.segmentShifts[0] = self.allocShift;
+        defer self.allocShift += 1;
         self.segments = self.segmentStore[0..1];
     }
 
+    inline fn segmentLimit(self: MessageBuilder, segment: u32) u32 {
+        return (@as(u32, 1)) << self.segmentShifts[segment];
+    }
+
+    /// try to allocate in the given segment.
+    pub fn alloc(self: *MessageBuilder, segment: u32, words: u32) Allocator.Error!BuildContext {
+        const bytes: u32 = words << 3;
+        if (segment < self.segments.len and self.segments[segment].len + bytes < self.segmentLimit(segment)) {
+            defer self.segments[segment].len += bytes;
+            return .{ .segments = &self.segments, .segment = segment, .offsetWords = @intCast(self.segments.len >> 3) };
+        } else {
+            unreachable;
+        }
+    }
+
     pub fn deinit(self: *MessageBuilder) void {
-        for (self.segments) |segment| {
-            self.allocator.free(segment);
+        for (self.segments, 0..) |*segment, n| {
+            segment.len = self.segmentLimit(@as(u32, @intCast(n)));
+            self.allocator.free(segment.*);
         }
     }
 };
@@ -455,4 +474,10 @@ test "test MessageBuilder" {
     var builder = MessageBuilder{ .allocator = std.testing.allocator };
     try builder.init();
     defer builder.deinit();
+    try std.testing.expectEqual(@as(usize, 1), builder.segments.len);
+
+    const context = try builder.alloc(0, 1024);
+    try std.testing.expectEqual(@as(u32, 0), context.segment);
+    try std.testing.expectEqual(@as(u32, 0), context.offsetWords);
+    try std.testing.expectEqual(@as(usize, 8192), context.segments.*[0].len);
 }
