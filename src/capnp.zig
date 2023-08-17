@@ -432,6 +432,10 @@ pub const BuildContext = struct {
     segment: u32,
     offsetWords: u32,
 
+    pub fn offsetBytes(self: BuildContext) u32 {
+        return self.offsetWords << 3;
+    }
+
     pub fn readIntWithBound(self: BuildContext, comptime T: type, offset: u32, boundWords: u29) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
         return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)]) else 0;
@@ -451,8 +455,9 @@ pub const BuildContext = struct {
         self.writeInt(u64, 0, ptr.to_u64());
     }
 
-    pub fn allocStruct(self: *BuildContext, ptrWords: u16, dataWords: u16) Allocator.Error!StructBuilder {
+    pub fn allocStruct(self: *BuildContext, dataWords: u16, ptrWords: u16) Allocator.Error!StructBuilder {
         const builderCtx = try self.builder.alloc(self.segment, ptrWords + dataWords);
+        self.writePtr(Ptr{ .struct_ = .{ .offsetWords = 0, .ptrWords = ptrWords, .dataWords = dataWords } });
         return StructBuilder{ .context = builderCtx, .ptrWords = ptrWords, .dataWords = dataWords };
     }
 };
@@ -462,8 +467,12 @@ pub const StructBuilder = struct {
     dataWords: u16,
     ptrWords: u16,
 
-    pub fn readIntField(self: StructReader, comptime T: type, offset: u32) T {
+    pub fn readIntField(self: StructBuilder, comptime T: type, offset: u32) T {
         return self.context.readIntWithBound(T, offset, self.dataWords);
+    }
+
+    pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
+        return self.context.writeInt(T, offset, value);
     }
 };
 

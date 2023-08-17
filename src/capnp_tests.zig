@@ -43,11 +43,11 @@ pub const Date = struct {
             return self.builder.writeIntField(i16, 0, value);
         }
 
-        pub fn setMonth(self: Builder, value: u8) u8 {
+        pub fn setMonth(self: Builder, value: u8) void {
             return self.builder.writeIntField(u8, 2, value);
         }
 
-        pub fn setDay(self: Builder, value: u8) u8 {
+        pub fn setDay(self: Builder, value: u8) void {
             return self.builder.writeIntField(u8, 3, value);
         }
     };
@@ -92,7 +92,16 @@ test "simple struct packing" {
     defer builder.deinit();
 
     var date = try builder.initRootStruct(Date);
-    _ = date;
+
+    try std.testing.expectEqual(@as(u32, 1), date.builder.context.offsetWords);
+
+    date.setDay(14);
+    date.setMonth(7);
+    date.setYear(2023);
+
+    try std.testing.expectEqual(@as(i16, 2023), date.getYear());
+    try std.testing.expectEqual(@as(u8, 7), date.getMonth());
+    try std.testing.expectEqual(@as(u8, 14), date.getDay());
 }
 
 test "simple struct unpacking (negative year)" {
