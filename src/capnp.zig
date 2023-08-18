@@ -293,6 +293,28 @@ pub fn ListReader(comptime T: type) type {
     };
 }
 
+pub fn ListBuilder(comptime T: type) type {
+    _ = T;
+    return struct {
+        const Self = @This();
+
+        ptr: BuildContext,
+        context: BuildContext,
+
+        elementSize: u3,
+        length: u29,
+
+        pub fn fromBuildContext(context: BuildContext) Self {
+            _ = context;
+        }
+
+        pub fn init(self: *Self, length: u29) Allocator.Error!void {
+            _ = length;
+            _ = self;
+        }
+    };
+}
+
 pub fn ListIterator(comptime T: type, comptime U: type) type {
     return struct {
         const Self = @This();

@@ -52,25 +52,6 @@ pub const Date = struct {
         }
     };
 };
-pub const Lists = struct {
-    pub const Reader = struct {
-        reader: capnp.StructReader,
-
-        pub fn getU8(self: Reader) capnp.Counter.Error!capnp.ListReader(u8) {
-            return self.reader.readPtrField(capnp.ListReader(u8), 0);
-        }
-    };
-};
-
-pub const CompositeLists = struct {
-    pub const Reader = struct {
-        reader: capnp.StructReader,
-
-        pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
-            return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
-        }
-    };
-};
 
 test "simple struct unpacking" {
     var file = try std.fs.cwd().openFile("capnp-tests/01_simple_struct_date_20230714.bin", .{});
@@ -117,6 +98,34 @@ test "simple struct unpacking (negative year)" {
     try std.testing.expectEqual(@as(u8, 14), s.getDay());
 }
 
+pub const Lists = struct {
+    pub const Reader = struct {
+        reader: capnp.StructReader,
+
+        pub fn getU8(self: Reader) capnp.Counter.Error!capnp.ListReader(u8) {
+            return self.reader.readPtrField(capnp.ListReader(u8), 0);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn getU8(self: Builder) capnp.StructBuilder.Error!capnp.ListBuilder(u8) {
+            return self.reader.readPtrField(capnp.ListBuilder(u8), 0);
+        }
+    };
+};
+
+pub const CompositeLists = struct {
+    pub const Reader = struct {
+        reader: capnp.StructReader,
+
+        pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
+            return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
+        }
+    };
+};
+
 test "struct of lists" {
     var file = try std.fs.cwd().openFile("capnp-tests/02_simple_lists.bin", .{});
     defer file.close();
@@ -131,6 +140,12 @@ test "struct of lists" {
         const j: u32 = @intCast(i);
         try std.testing.expectEqual(j, xs.get(j));
     }
+}
+
+test "struct of lists (writing)" {
+    var builder = capnp.MessageBuilder{ .allocator = std.testing.allocator };
+    try builder.init();
+    defer builder.deinit();
 }
 
 test "struct of composite list" {
