@@ -338,6 +338,8 @@ pub fn ListBuilder(comptime T: type) type {
             std.debug.assert(self.context.?.segment == self.ptr.segment);
             const offsetWords: i30 = @intCast(self.context.?.offsetWords - self.ptr.offsetWords - 1);
 
+            self.length = length;
+
             self.ptr.writePtr(Ptr{ .list = .{ .offsetWords = offsetWords, .elementsOrWords = length, .elementSize = self.elementSize } });
         }
 
@@ -350,7 +352,61 @@ pub fn ListBuilder(comptime T: type) type {
         }
 
         pub fn get(self: Self, ix: u32) T {
+            std.debug.assert(ix < self.length);
             return self.context.?.readInt(T, ix);
+        }
+    };
+}
+
+pub fn CompositeListBuilder(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        ptr: BuildContext,
+        context: ?BuildContext,
+
+        length: u29,
+
+        pub fn fromBuildContext(ptr: BuildContext) Self {
+
+            // For now, just assert pointer is empty.
+            std.debug.assert(ptr.readInt(u64, 0) == 0);
+
+            return Self{ .ptr = ptr, .context = null, .length = 0 };
+        }
+
+        pub fn init(self: *Self, length: u29) Allocator.Error!void {
+            // Initialize the array.
+            std.debug.assert(self.length == 0);
+
+            const sizeInWords: u29 = (T._Metadata.ptrWords + T._Metadata.dataWords) * length;
+
+            var structPtr = try self.ptr.builder.alloc(self.ptr.segment, 1 + sizeInWords);
+            self.context = structPtr;
+            self.context.?.offsetWords += 1;
+
+            structPtr.writePtr(Ptr{ .struct_ = .{ .offsetWords = length, .dataWords = T._Metadata.dataWords, .ptrWords = T._Metadata.ptrWords } });
+
+            std.debug.assert(structPtr.segment == self.ptr.segment);
+            const offsetWords: i30 = @intCast(structPtr.offsetWords - self.ptr.offsetWords - 1);
+
+            self.length = length;
+
+            self.ptr.writePtr(Ptr{ .list = .{ .offsetWords = offsetWords, .elementsOrWords = sizeInWords, .elementSize = 7 } });
+        }
+
+        pub fn get(self: Self, ix: u32) T.Builder {
+            std.debug.assert(ix < self.length);
+            var _context = self.context.?;
+            _context.relativeWords(@intCast((T._Metadata.ptrWords + T._Metadata.dataWords) * ix));
+
+            return T.Builder{
+                .builder = StructBuilder{
+                    .context = _context,
+                    .dataWords = T._Metadata.dataWords,
+                    .ptrWords = T._Metadata.ptrWords,
+                },
+            };
         }
     };
 }
@@ -492,7 +548,7 @@ pub const BuildContext = struct {
     builder: *MessageBuilder,
     segments: *[][]u8,
     segment: u32,
-    offsetWords: u32,
+    offsetWords: u29,
 
     pub fn offsetBytes(self: BuildContext) u32 {
         return self.offsetWords << 3;
@@ -522,6 +578,10 @@ pub const BuildContext = struct {
         self.writePtr(Ptr{ .struct_ = .{ .offsetWords = 0, .ptrWords = ptrWords, .dataWords = dataWords } });
         return StructBuilder{ .context = builderCtx, .ptrWords = ptrWords, .dataWords = dataWords };
     }
+
+    pub fn relativeWords(self: *BuildContext, dx: i30) void {
+        self.offsetWords = @intCast(dx + self.offsetWords);
+    }
 };
 
 pub const StructBuilder = struct {
@@ -537,9 +597,9 @@ pub const StructBuilder = struct {
         return self.context.writeInt(T, offset, value);
     }
 
-    pub fn buildPtrField(self: StructBuilder, comptime T: type, offset: u32) T {
+    pub fn buildPtrField(self: StructBuilder, comptime T: type, offset: u29) T {
         var ptr = self.context;
-        ptr.offsetWords += self.dataWords + offset;
+        ptr.relativeWords(self.dataWords + offset);
         return T.fromBuildContext(ptr);
     }
 };

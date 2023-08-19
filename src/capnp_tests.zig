@@ -122,11 +122,23 @@ pub const Lists = struct {
 };
 
 pub const CompositeLists = struct {
+    pub const _Metadata = struct {
+        pub const ptrWords = 1;
+        pub const dataWords = 0;
+    };
     pub const Reader = struct {
         reader: capnp.StructReader,
 
         pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
             return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn getDates(self: Builder) capnp.CompositeListBuilder(Date) {
+            return self.builder.buildPtrField(capnp.CompositeListBuilder(Date), 0);
         }
     };
 };
@@ -187,6 +199,32 @@ test "struct of composite list" {
 
     while (it.next()) |x| {
         std.debug.print("year={}\n", .{x.getYear()});
+    }
+}
+
+test "struct of composite list (writing)" {
+    var builder = capnp.MessageBuilder{ .allocator = std.testing.allocator };
+    try builder.init();
+    defer builder.deinit();
+    {
+        var lists = try builder.initRootStruct(CompositeLists);
+
+        var list = lists.getDates();
+        try list.init(10);
+
+        for (0..10) |i| {
+            list.get(@intCast(i)).setYear(@intCast(i));
+        }
+    }
+
+    {
+        var reader = builder.toReader();
+        var lists = try reader.getRootStruct(CompositeLists);
+        var list = try lists.getDates();
+
+        for (0..10) |i| {
+            try std.testing.expectEqual(@as(i16, @intCast(i)), list.get(@intCast(i)).getYear());
+        }
     }
 }
 
