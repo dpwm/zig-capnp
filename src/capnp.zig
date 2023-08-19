@@ -613,6 +613,10 @@ pub const MessageBuilder = struct {
         }
     }
 
+    pub fn toReader(self: MessageBuilder) Message {
+        return Message{ .segments = self.segments };
+    }
+
     pub fn initRootStruct(self: *MessageBuilder, comptime T: type) Allocator.Error!T.Builder {
         var ctx = try self.alloc(0, 1);
         return T.Builder{ .builder = try ctx.allocStruct(T._Metadata.dataWords, T._Metadata.ptrWords) };

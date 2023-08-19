@@ -152,14 +152,25 @@ test "struct of lists (writing)" {
     try builder.init();
     defer builder.deinit();
 
-    var lists = try builder.initRootStruct(Lists);
+    {
+        var lists = try builder.initRootStruct(Lists);
 
-    var list = lists.getU8();
-    try list.init(10);
+        var list = lists.getU8();
+        try list.init(10);
 
-    for (0..10) |i| {
-        list.set(@intCast(i), @intCast(i));
-        try std.testing.expectEqual(@as(u8, @intCast(i)), list.get(@intCast(i)));
+        for (0..10) |i| {
+            list.set(@intCast(i), @intCast(i));
+            try std.testing.expectEqual(@as(u8, @intCast(i)), list.get(@intCast(i)));
+        }
+    }
+    {
+        var reader = builder.toReader();
+        var lists = try reader.getRootStruct(Lists);
+
+        var list = try lists.getU8();
+        for (0..10) |i| {
+            try std.testing.expectEqual(@as(u8, @intCast(i)), list.get(@as(u32, @intCast(i))));
+        }
     }
 }
 
