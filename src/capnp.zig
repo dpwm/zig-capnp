@@ -294,23 +294,63 @@ pub fn ListReader(comptime T: type) type {
 }
 
 pub fn ListBuilder(comptime T: type) type {
-    _ = T;
     return struct {
         const Self = @This();
 
         ptr: BuildContext,
-        context: BuildContext,
+        context: ?BuildContext,
 
-        elementSize: u3,
+        elementSize: u3 = switch (T) {
+            void => 0,
+            bool => 1,
+            u8, i8 => 2,
+            u16, i16 => 3,
+            u32, i32, f32 => 4,
+            u64, i64, f64 => 5,
+            else => unreachable,
+        },
         length: u29,
 
-        pub fn fromBuildContext(context: BuildContext) Self {
-            _ = context;
+        pub fn fromBuildContext(ptr: BuildContext) Self {
+
+            // For now, just assert pointer is empty.
+            std.debug.assert(ptr.readInt(u64, 0) == 0);
+
+            return Self{ .ptr = ptr, .context = null, .length = 0 };
         }
 
         pub fn init(self: *Self, length: u29) Allocator.Error!void {
-            _ = length;
-            _ = self;
+            // Initialize the array.
+            std.debug.assert(self.length == 0);
+
+            const sizeInWords = switch (self.elementSize) {
+                0 => 0,
+                1 => (length + 63) / 64,
+                2 => (length + 7) / 8,
+                3 => (length + 3) / 4,
+                4 => (length + 1) / 2,
+                5 => length,
+                else => unreachable,
+            };
+
+            self.context = try self.ptr.builder.alloc(self.ptr.segment, sizeInWords);
+
+            std.debug.assert(self.context.?.segment == self.ptr.segment);
+            const offsetWords: i30 = @intCast(self.context.?.offsetWords - self.ptr.offsetWords - 1);
+
+            self.ptr.writePtr(Ptr{ .list = .{ .offsetWords = offsetWords, .elementsOrWords = length, .elementSize = self.elementSize } });
+        }
+
+        pub fn set(self: *Self, index: u32, value: T) void {
+            if (self.context) |context| {
+                context.writeInt(T, index, value);
+            } else {
+                return undefined;
+            }
+        }
+
+        pub fn get(self: Self, ix: u32) T {
+            return self.context.?.readInt(T, ix);
         }
     };
 }
@@ -495,6 +535,12 @@ pub const StructBuilder = struct {
 
     pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
         return self.context.writeInt(T, offset, value);
+    }
+
+    pub fn buildPtrField(self: StructBuilder, comptime T: type, offset: u32) T {
+        var ptr = self.context;
+        ptr.offsetWords += self.dataWords + offset;
+        return T.fromBuildContext(ptr);
     }
 };
 

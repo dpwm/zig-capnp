@@ -99,6 +99,11 @@ test "simple struct unpacking (negative year)" {
 }
 
 pub const Lists = struct {
+    pub const _Metadata = struct {
+        pub const ptrWords = 1;
+        pub const dataWords = 0;
+    };
+
     pub const Reader = struct {
         reader: capnp.StructReader,
 
@@ -110,8 +115,8 @@ pub const Lists = struct {
     pub const Builder = struct {
         builder: capnp.StructBuilder,
 
-        pub fn getU8(self: Builder) capnp.StructBuilder.Error!capnp.ListBuilder(u8) {
-            return self.reader.readPtrField(capnp.ListBuilder(u8), 0);
+        pub fn getU8(self: Builder) capnp.ListBuilder(u8) {
+            return self.builder.buildPtrField(capnp.ListBuilder(u8), 0);
         }
     };
 };
@@ -146,6 +151,16 @@ test "struct of lists (writing)" {
     var builder = capnp.MessageBuilder{ .allocator = std.testing.allocator };
     try builder.init();
     defer builder.deinit();
+
+    var lists = try builder.initRootStruct(Lists);
+
+    var list = lists.getU8();
+    try list.init(10);
+
+    for (0..10) |i| {
+        list.set(@intCast(i), @intCast(i));
+        try std.testing.expectEqual(@as(u8, @intCast(i)), list.get(@intCast(i)));
+    }
 }
 
 test "struct of composite list" {
