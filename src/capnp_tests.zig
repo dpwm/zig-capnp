@@ -229,14 +229,18 @@ test "struct of composite list (writing)" {
 }
 
 pub const UnionTest = struct {
-    pub const _Tag = union(enum) {
-        void,
-        int32: i32,
-        _other: u16,
+    pub const _Metadata = struct {
+        pub const dataWords = 1;
+        pub const ptrWords = 0;
     };
-
     pub const Reader = struct {
         reader: capnp.StructReader,
+
+        pub const _Tag = union(enum) {
+            void,
+            int32: i32,
+            _other: u16,
+        };
 
         pub fn which(self: Reader) _Tag {
             const t = self.reader.readIntField(u16, 0);
@@ -252,14 +256,55 @@ pub const UnionTest = struct {
             return self.reader.readIntField(i32, 1);
         }
     };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub const _Tag = union(enum) {
+            void,
+            int32: i32,
+            _: u16,
+        };
+
+        pub fn setVoid(self: *Builder) void {
+            self.builder.writeIntField(u16, 0, 0);
+        }
+
+        pub fn setInt32(self: *Builder, value: i32) void {
+            self.builder.writeIntField(u16, 0, 1);
+            self.builder.writeIntField(i32, 1, value);
+        }
+
+        pub fn which(self: *Builder) _Tag {
+            const t = self.builder.readIntField(u16, 0);
+            return switch (t) {
+                0 => .void,
+                1 => .{ .int32 = self.builder.readIntField(i32, 1) },
+                else => .{ ._ = t },
+            };
+        }
+    };
 };
 
 pub const ULists = struct {
+    pub const _Metadata = struct {
+        pub const dataWords = 0;
+        pub const ptrWords = 1;
+    };
+
     pub const Reader = struct {
         reader: capnp.StructReader,
 
         pub fn getUnionTests(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(UnionTest) {
             return self.reader.readPtrField(capnp.CompositeListReader(UnionTest), 0);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn getUnionTests(self: *Builder) capnp.CompositeListBuilder(UnionTest) {
+            return self.builder.buildPtrField(capnp.CompositeListBuilder(UnionTest), 0);
         }
     };
 };
@@ -275,6 +320,37 @@ test "struct with union" {
     var it = (try s.getUnionTests()).iter();
     while (it.next()) |x| {
         std.debug.print("{}\n", .{x.which()});
+    }
+}
+
+test "struct with union (building)" {
+    var message = capnp.MessageBuilder{ .allocator = std.testing.allocator };
+
+    try message.init();
+    defer message.deinit();
+
+    var lists = try message.initRootStruct(ULists);
+
+    var list = lists.getUnionTests();
+    try list.init(3);
+
+    {
+        var x = list.get(0);
+        x.setInt32(77);
+        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 77 }, x.which());
+    }
+    {
+        var x = list.get(1);
+        x.setInt32(88);
+        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 88 }, x.which());
+
+        x.setVoid();
+        try std.testing.expectEqual(UnionTest.Builder._Tag.void, x.which());
+    }
+    {
+        var x = list.get(2);
+        x.setInt32(99);
+        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 99 }, x.which());
     }
 }
 
