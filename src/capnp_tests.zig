@@ -3,9 +3,9 @@ const capnp = @import("capnp.zig");
 const testing = std.testing;
 
 pub const Date = struct {
-    pub const _Metadata = struct {
-        pub const dataWords = 1;
-        pub const ptrWords = 0;
+    pub const _Metadata = capnp.StructMetadata{
+        .dataWords = 1,
+        .ptrWords = 0,
     };
 
     pub const Reader = struct {
@@ -99,9 +99,9 @@ test "simple struct unpacking (negative year)" {
 }
 
 pub const Lists = struct {
-    pub const _Metadata = struct {
-        pub const ptrWords = 1;
-        pub const dataWords = 0;
+    pub const _Metadata = capnp.StructMetadata{
+        .ptrWords = 1,
+        .dataWords = 0,
     };
 
     pub const Reader = struct {
@@ -122,9 +122,9 @@ pub const Lists = struct {
 };
 
 pub const CompositeLists = struct {
-    pub const _Metadata = struct {
-        pub const ptrWords = 1;
-        pub const dataWords = 0;
+    pub const _Metadata = capnp.StructMetadata{
+        .ptrWords = 1,
+        .dataWords = 0,
     };
     pub const Reader = struct {
         reader: capnp.StructReader,
@@ -229,9 +229,9 @@ test "struct of composite list (writing)" {
 }
 
 pub const UnionTest = struct {
-    pub const _Metadata = struct {
-        pub const dataWords = 1;
-        pub const ptrWords = 0;
+    pub const _Metadata = capnp.StructMetadata{
+        .dataWords = 1,
+        .ptrWords = 0,
     };
     pub const Reader = struct {
         reader: capnp.StructReader,
@@ -287,9 +287,9 @@ pub const UnionTest = struct {
 };
 
 pub const ULists = struct {
-    pub const _Metadata = struct {
-        pub const dataWords = 0;
-        pub const ptrWords = 1;
+    pub const _Metadata = capnp.StructMetadata{
+        .dataWords = 0,
+        .ptrWords = 1,
     };
 
     pub const Reader = struct {
@@ -355,9 +355,9 @@ test "struct with union (building)" {
 }
 
 pub const Defaults = struct {
-    pub const _Metadata = struct {
-        pub const dataWords = 1;
-        pub const ptrWords = 0;
+    pub const _Metadata = capnp.StructMetadata{
+        .dataWords = 1,
+        .ptrWords = 0,
     };
     pub const Reader = struct {
         reader: capnp.StructReader,

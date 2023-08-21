@@ -604,6 +604,11 @@ pub const StructBuilder = struct {
     }
 };
 
+pub const StructMetadata = struct {
+    ptrWords: u16,
+    dataWords: u16,
+};
+
 pub const MessageBuilder = struct {
     allocator: Allocator = std.heap.page_allocator,
     allocShift: u5 = 16, // For consistency.
