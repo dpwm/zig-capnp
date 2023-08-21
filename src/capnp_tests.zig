@@ -355,11 +355,27 @@ test "struct with union (building)" {
 }
 
 pub const Defaults = struct {
+    pub const _Metadata = struct {
+        pub const dataWords = 1;
+        pub const ptrWords = 0;
+    };
     pub const Reader = struct {
         reader: capnp.StructReader,
 
         pub fn getInt32(self: Reader) i32 {
             return 17 ^ self.reader.readIntField(i32, 0);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn setInt32(self: Builder, value: i32) void {
+            return self.builder.writeIntField(i32, 0, value ^ 17);
+        }
+
+        pub fn getInt32(self: Builder) i32 {
+            return 17 ^ self.builder.readIntField(i32, 0);
         }
     };
 };
@@ -377,6 +393,18 @@ test "default values" {
         s.getInt32(),
     );
     // TODO: default for pointers. This is easier than it seems!
+}
+
+test "default values (build)" {
+    var message = capnp.MessageBuilder{ .allocator = std.testing.allocator };
+
+    try message.init();
+    defer message.deinit();
+
+    var s = try message.initRootStruct(Defaults);
+
+    s.setInt32(100);
+    try std.testing.expectEqual(@as(i32, 100), s.getInt32());
 }
 
 pub const BitsAndFloats = struct {
