@@ -205,7 +205,7 @@ pub const StructReader = struct {
         const bucket: u29 = comptime offset / 8;
         const shift: u3 = comptime offset % 8;
 
-        return self.context.readIntWithBound(u8, bucket, self.dataWords) >> shift == 1;
+        return self.readIntField(u8, bucket) >> shift == 1;
     }
 
     pub fn readPtrField(self: StructReader, comptime T: type, ptrNo: u16) Counter.Error!T {
@@ -241,6 +241,61 @@ pub const StructReader = struct {
             .dataWords = struct_.dataWords,
             .ptrWords = struct_.ptrWords,
         };
+    }
+};
+
+pub const StructBuilder = struct {
+    context: BuildContext,
+    dataWords: u16,
+    ptrWords: u16,
+
+    pub fn readIntField(self: StructBuilder, comptime T: type, offset: u32) T {
+        return self.context.readIntWithBound(T, offset, self.dataWords);
+    }
+
+    pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
+        return self.context.writeInt(T, offset, value);
+    }
+
+    pub fn buildPtrField(self: StructBuilder, comptime T: type, offset: u29) T {
+        var ptr = self.context;
+        ptr.relativeWords(self.dataWords + offset);
+        return T.fromBuildContext(ptr);
+    }
+
+    pub fn readFloatField(self: StructBuilder, comptime T: type, offset: u32) T {
+        const U = comptime switch (T) {
+            f32 => u32,
+            f64 => u64,
+            else => unreachable,
+        };
+        return @bitCast(self.readIntField(U, offset));
+    }
+
+    pub fn writeFloatField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
+        const U = comptime switch (T) {
+            f32 => u32,
+            f64 => u64,
+            else => unreachable,
+        };
+        return self.writeIntField(U, offset, @bitCast(value));
+    }
+
+    pub fn readBoolField(self: StructBuilder, comptime offset: u32) bool {
+        const bucket: u29 = comptime offset / 8;
+        const shift: u3 = comptime offset % 8;
+
+        return self.readIntField(u8, bucket) >> shift == 1;
+    }
+
+    pub fn writeBoolField(self: StructBuilder, comptime offset: u32, value: bool) void {
+        const bucket: u29 = comptime offset / 8;
+        const shift: u3 = comptime offset % 8;
+        const mask: u8 = comptime @as(u8, 1) << shift;
+
+        const old = self.readIntField(u8, bucket);
+
+        self.context.writeInt(u8, bucket, ~mask & old | if (value) mask else 0);
     }
 };
 
@@ -581,26 +636,6 @@ pub const BuildContext = struct {
 
     pub fn relativeWords(self: *BuildContext, dx: i30) void {
         self.offsetWords = @intCast(dx + self.offsetWords);
-    }
-};
-
-pub const StructBuilder = struct {
-    context: BuildContext,
-    dataWords: u16,
-    ptrWords: u16,
-
-    pub fn readIntField(self: StructBuilder, comptime T: type, offset: u32) T {
-        return self.context.readIntWithBound(T, offset, self.dataWords);
-    }
-
-    pub fn writeIntField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
-        return self.context.writeInt(T, offset, value);
-    }
-
-    pub fn buildPtrField(self: StructBuilder, comptime T: type, offset: u29) T {
-        var ptr = self.context;
-        ptr.relativeWords(self.dataWords + offset);
-        return T.fromBuildContext(ptr);
     }
 };
 

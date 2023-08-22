@@ -408,6 +408,8 @@ test "default values (build)" {
 }
 
 pub const BitsAndFloats = struct {
+    pub const _Metadata = capnp.StructMetadata{ .ptrWords = 0, .dataWords = 2 };
+
     pub const Reader = struct {
         reader: capnp.StructReader,
 
@@ -421,6 +423,34 @@ pub const BitsAndFloats = struct {
 
         pub fn getBit(self: Reader) bool {
             return self.reader.readBoolField(32);
+        }
+    };
+
+    pub const Builder = struct {
+        builder: capnp.StructBuilder,
+
+        pub fn getFloat32(self: Builder) f32 {
+            return self.builder.readFloatField(f32, 0);
+        }
+
+        pub fn getFloat64(self: Builder) f64 {
+            return self.builder.readFloatField(f64, 1);
+        }
+
+        pub fn setFloat32(self: Builder, value: f32) void {
+            return self.builder.writeFloatField(f32, 0, value);
+        }
+
+        pub fn setFloat64(self: Builder, value: f64) void {
+            return self.builder.writeFloatField(f64, 1, value);
+        }
+
+        pub fn getBit(self: Builder) bool {
+            return self.builder.readBoolField(32);
+        }
+
+        pub fn setBit(self: Builder, value: bool) void {
+            return self.builder.writeBoolField(32, value);
         }
     };
 };
@@ -441,6 +471,24 @@ test "bits and floats" {
         @as(f64, 3.14159),
         s.getFloat64(),
     );
+    try std.testing.expectEqual(true, s.getBit());
+
+    // TODO: default for pointers. This is easier than it seems!
+}
+
+test "bits and floats (build)" {
+    var message = capnp.MessageBuilder{ .allocator = std.testing.allocator };
+
+    try message.init();
+    defer message.deinit();
+
+    var s = try message.initRootStruct(BitsAndFloats);
+
+    s.setFloat32(23.0);
+    try std.testing.expectEqual(@as(f32, 23.0), s.getFloat32());
+
+    try std.testing.expectEqual(false, s.getBit());
+    s.setBit(true);
     try std.testing.expectEqual(true, s.getBit());
 
     // TODO: default for pointers. This is easier than it seems!
