@@ -31,7 +31,7 @@ pub const Ptr = union(enum) {
         _: u62,
     };
     null: void,
-    struct_: Struct,
+    struct_: Ptr.Struct,
     list: List,
     inter_segment: InterSegment,
     capability: Capability,
@@ -298,6 +298,13 @@ pub const StructBuilder = struct {
         self.context.writeInt(u8, bucket, ~mask & old | if (value) mask else 0);
     }
 };
+
+pub fn Struct(comptime T: type) type {
+    return struct {
+        pub const Builder = StructBuilder(T);
+        pub const Reader = StructReader(T);
+    };
+}
 
 pub fn ListReader(comptime T: type) type {
     return struct {
