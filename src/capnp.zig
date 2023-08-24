@@ -32,9 +32,9 @@ pub const Ptr = union(enum) {
     };
     null: void,
     struct_: Ptr.Struct,
-    list: List,
-    inter_segment: InterSegment,
-    capability: Capability,
+    list: Ptr.List,
+    inter_segment: Ptr.InterSegment,
+    capability: Ptr.Capability,
 
     pub fn of_u64(ptr: u64) Ptr {
         if (ptr == 0) {
@@ -415,6 +415,13 @@ pub fn ListBuilder(comptime T: type) type {
             std.debug.assert(ix < self.length);
             return self.context.?.readInt(T, ix);
         }
+    };
+}
+
+pub fn List(comptime T: type) type {
+    return struct {
+        const Builder = ListBuilder(T);
+        const Reader = ListReader(T);
     };
 }
 
