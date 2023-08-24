@@ -107,16 +107,16 @@ pub const Lists = struct {
     pub const Reader = struct {
         reader: capnp.Struct.Reader,
 
-        pub fn getU8(self: Reader) capnp.Counter.Error!capnp.ListReader(u8) {
-            return self.reader.readPtrField(capnp.ListReader(u8), 0);
+        pub fn getU8(self: Reader) capnp.Counter.Error!capnp.List(u8).Reader {
+            return self.reader.readPtrField(capnp.List(u8).Reader, 0);
         }
     };
 
     pub const Builder = struct {
         builder: capnp.Struct.Builder,
 
-        pub fn getU8(self: Builder) capnp.ListBuilder(u8) {
-            return self.builder.buildPtrField(capnp.ListBuilder(u8), 0);
+        pub fn getU8(self: Builder) capnp.List(u8).Builder {
+            return self.builder.buildPtrField(capnp.List(u8).Builder, 0);
         }
     };
 };

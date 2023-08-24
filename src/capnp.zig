@@ -420,8 +420,8 @@ pub fn ListBuilder(comptime T: type) type {
 
 pub fn List(comptime T: type) type {
     return struct {
-        const Builder = ListBuilder(T);
-        const Reader = ListReader(T);
+        pub const Builder = ListBuilder(T);
+        pub const Reader = ListReader(T);
     };
 }
 
