@@ -129,16 +129,16 @@ pub const CompositeLists = struct {
     pub const Reader = struct {
         reader: capnp.Struct.Reader,
 
-        pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
-            return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
+        pub fn getDates(self: Reader) capnp.Counter.Error!capnp.List(Date).Reader {
+            return self.reader.readPtrField(capnp.List(Date).Reader, 0);
         }
     };
 
     pub const Builder = struct {
         builder: capnp.Struct.Builder,
 
-        pub fn getDates(self: Builder) capnp.CompositeListBuilder(Date) {
-            return self.builder.buildPtrField(capnp.CompositeListBuilder(Date), 0);
+        pub fn getDates(self: Builder) capnp.List(Date).Builder {
+            return self.builder.buildPtrField(capnp.List(Date).Builder, 0);
         }
     };
 };

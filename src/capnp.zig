@@ -419,6 +419,16 @@ pub fn ListBuilder(comptime T: type) type {
 }
 
 pub fn List(comptime T: type) type {
+    switch (@typeInfo(T)) {
+        .Struct => {
+            return struct {
+                pub const Builder = CompositeListBuilder(T);
+                pub const Reader = CompositeListReader(T);
+            };
+        },
+
+        else => {},
+    }
     return struct {
         pub const Builder = ListBuilder(T);
         pub const Reader = ListReader(T);
