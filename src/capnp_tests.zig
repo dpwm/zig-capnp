@@ -9,7 +9,7 @@ pub const Date = struct {
     };
 
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getYear(self: Reader) i16 {
             return self.reader.readIntField(i16, 0);
@@ -25,7 +25,7 @@ pub const Date = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn getYear(self: Builder) i16 {
             return self.builder.readIntField(i16, 0);
@@ -105,7 +105,7 @@ pub const Lists = struct {
     };
 
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getU8(self: Reader) capnp.Counter.Error!capnp.ListReader(u8) {
             return self.reader.readPtrField(capnp.ListReader(u8), 0);
@@ -113,7 +113,7 @@ pub const Lists = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn getU8(self: Builder) capnp.ListBuilder(u8) {
             return self.builder.buildPtrField(capnp.ListBuilder(u8), 0);
@@ -127,7 +127,7 @@ pub const CompositeLists = struct {
         .dataWords = 0,
     };
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getDates(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(Date) {
             return self.reader.readPtrField(capnp.CompositeListReader(Date), 0);
@@ -135,7 +135,7 @@ pub const CompositeLists = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn getDates(self: Builder) capnp.CompositeListBuilder(Date) {
             return self.builder.buildPtrField(capnp.CompositeListBuilder(Date), 0);
@@ -234,7 +234,7 @@ pub const UnionTest = struct {
         .ptrWords = 0,
     };
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub const _Tag = union(enum) {
             void,
@@ -258,7 +258,7 @@ pub const UnionTest = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub const _Tag = union(enum) {
             void,
@@ -293,7 +293,7 @@ pub const ULists = struct {
     };
 
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getUnionTests(self: Reader) capnp.Counter.Error!capnp.CompositeListReader(UnionTest) {
             return self.reader.readPtrField(capnp.CompositeListReader(UnionTest), 0);
@@ -301,7 +301,7 @@ pub const ULists = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn getUnionTests(self: *Builder) capnp.CompositeListBuilder(UnionTest) {
             return self.builder.buildPtrField(capnp.CompositeListBuilder(UnionTest), 0);
@@ -360,7 +360,7 @@ pub const Defaults = struct {
         .ptrWords = 0,
     };
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getInt32(self: Reader) i32 {
             return 17 ^ self.reader.readIntField(i32, 0);
@@ -368,7 +368,7 @@ pub const Defaults = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn setInt32(self: Builder, value: i32) void {
             return self.builder.writeIntField(i32, 0, value ^ 17);
@@ -411,7 +411,7 @@ pub const BitsAndFloats = struct {
     pub const _Metadata = capnp.StructMetadata{ .ptrWords = 0, .dataWords = 2 };
 
     pub const Reader = struct {
-        reader: capnp.StructReader,
+        reader: capnp.Struct.Reader,
 
         pub fn getFloat32(self: Reader) f32 {
             return self.reader.readFloatField(f32, 0);
@@ -427,7 +427,7 @@ pub const BitsAndFloats = struct {
     };
 
     pub const Builder = struct {
-        builder: capnp.StructBuilder,
+        builder: capnp.Struct.Builder,
 
         pub fn getFloat32(self: Builder) f32 {
             return self.builder.readFloatField(f32, 0);

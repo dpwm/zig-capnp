@@ -299,12 +299,10 @@ pub const StructBuilder = struct {
     }
 };
 
-pub fn Struct(comptime T: type) type {
-    return struct {
-        pub const Builder = StructBuilder(T);
-        pub const Reader = StructReader(T);
-    };
-}
+pub const Struct = struct {
+    pub const Builder = StructBuilder;
+    pub const Reader = StructReader;
+};
 
 pub fn ListReader(comptime T: type) type {
     return struct {
