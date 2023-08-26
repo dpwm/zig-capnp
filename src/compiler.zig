@@ -514,8 +514,7 @@ pub fn Transformer(comptime WriterType: type) type {
 
                     {
                         try self.writer.openStruct("Builder");
-                        try self.writer.writeLine("builder: capnp.StructBuilder");
-                        try self.writer.closeStruct();
+                        try self.writer.writeLine("builder: capnp.StructBuilder,\n");
 
                         {
                             const fields = try struct_.getFields();
@@ -524,6 +523,8 @@ pub fn Transformer(comptime WriterType: type) type {
                                 try self.print_field(field);
                             }
                         }
+
+                        try self.writer.closeStruct();
                     }
 
                     try self.writer.closeStruct();
