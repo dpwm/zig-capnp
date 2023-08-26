@@ -296,6 +296,77 @@ pub fn Transformer(comptime WriterType: type) type {
             }
         }
 
+        pub fn print_builder_getter_body(self: *Self, field: schema.Field.Reader) Error!void {
+            const writer = self.writer.writer;
+
+            switch (try field.which()) {
+                .slot => |slot| {
+                    const typeR = try slot.getType();
+                    switch (try typeR.which()) {
+                        .void => {
+                            try writer.writeAll("void {}");
+                        },
+                        .bool => {
+                            try writer.print("self.builder.readBoolField({})", .{slot.getOffset()});
+                        },
+                        .float32 => {
+                            try writer.print(
+                                "self.builder.readFloatField(f32, {})",
+                                .{slot.getOffset()},
+                            );
+                        },
+                        .float64 => {
+                            try writer.print(
+                                "self.builder.readFloatField(f64, {})",
+                                .{slot.getOffset()},
+                            );
+                        },
+                        .text, .data => {
+                            try writer.print(
+                                "try self.builder.readStringField({})",
+                                .{slot.getOffset()},
+                            );
+                        },
+                        .list => |list| {
+                            _ = list;
+                            try writer.writeAll("try self.builder.readPtrField(");
+                            // try self.zigType((try list.getElementType()));
+                            try self.zigType(typeR);
+                            try self.writer.writer.print(", {})", .{slot.getOffset()});
+                        },
+                        .struct_ => {
+                            try writer.print(
+                                ".{{ .builder = try self.builder.readPtrField(capnp.StructBuilder, {}) }}",
+                                .{
+                                    slot.getOffset(),
+                                },
+                            );
+                        },
+                        .enum_ => |enum_| {
+                            _ = enum_;
+                            try writer.print("@enumFromInt(self.builder.readIntField(u16, {}) ^ {})", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
+                        },
+                        .anyPointer => {
+                            try writer.print("try self.builder.readPtrField(capnp.AnyPointerReader, {})", .{
+                                slot.getOffset(),
+                            });
+                        },
+
+                        .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64 => {
+                            try writer.writeAll("self.builder.readIntField(");
+                            try self.zigType(typeR);
+                            try self.writer.writer.print(", {d}) ^ {d}", .{ slot.getOffset(), ValueTypeFormatter{ .value = try (try slot.getDefaultValue()).which() } });
+                        },
+                        else => {},
+                    }
+                },
+                .group => {
+                    try writer.writeAll(".{ .reader = self.reader }");
+                },
+                else => {},
+            }
+        }
+
         pub fn print_getter_body(self: *Self, field: schema.Field.Reader) Error!void {
             const writer = self.writer.writer;
 
@@ -365,6 +436,25 @@ pub fn Transformer(comptime WriterType: type) type {
                 },
                 else => {},
             }
+        }
+
+        pub fn print_builder_field(self: *Self, field: schema.Field.Reader) Error!void {
+            if (field.getDiscriminantValue() != 65535) return;
+            {
+                const name = try field.getName();
+
+                try self.writer.getterOpenArgs(name);
+                try self.writer.writer.writeAll("self: @This()");
+                try self.writer.functionDefCloseArgs();
+            }
+
+            try self.print_field_type(field, true);
+
+            try self.writer.functionDefOpenBlock();
+            try self.writer.writeLineC("return ");
+            try self.print_builder_getter_body(field);
+            try self.writer.writer.writeAll(";\n");
+            try self.writer.functionDefCloseBlock();
         }
 
         pub fn print_field(self: *Self, field: schema.Field.Reader) Error!void {
@@ -512,7 +602,7 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.writer.closeStruct();
                     }
 
-                    {
+                    { // Write Builder
                         try self.writer.openStruct("Builder");
                         try self.writer.writeLine("builder: capnp.StructBuilder,\n");
 
@@ -520,7 +610,7 @@ pub fn Transformer(comptime WriterType: type) type {
                             const fields = try struct_.getFields();
                             var fields_it = fields.iter();
                             while (fields_it.next()) |field| {
-                                try self.print_field(field);
+                                try self.print_builder_field(field);
                             }
                         }
 
