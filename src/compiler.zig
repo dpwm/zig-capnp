@@ -209,6 +209,77 @@ const ValueTypeFormatter = struct {
     }
 };
 
+pub fn TypeTransformers(comptime WriterType: type) type {
+    return struct {
+        const TT = @This();
+        const Error = WriterType.Error;
+        const Args = struct {
+            writer: WriterType,
+            typ: schema.Type.Reader,
+        };
+
+        const Void = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("void");
+            }
+        };
+
+        const List = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("capnp.List(");
+                try TT.writeReaderType(args.writer, try (try args.typ.which()).list.getElementType());
+                try args.writer.writeAll(")");
+            }
+        };
+
+        const Bool = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("bool");
+            }
+        };
+
+        const Int = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("int");
+            }
+        };
+
+        const Data = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("[]const u8");
+            }
+        };
+
+        const Text = struct {
+            pub fn writeReaderType(args: Args) !void {
+                try args.writer.writeAll("[]const u8");
+            }
+        };
+
+        pub fn getTypeTransformer(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
+            return switch (typ) {
+                .void => Void,
+                .list => List,
+                .int8, .int16, .int32, .int64, .uint8, .uint16, .uint32, .uint64 => Int,
+                .bool => Bool,
+                .data => Data,
+                .text => Text,
+                else => Void,
+            };
+        }
+
+        pub fn writeReaderType(writer: WriterType, typ: schema.Type.Reader) Transformer(WriterType).Error!void {
+            switch (typ.which() catch .void) {
+                inline else => |x, tag| {
+                    _ = x;
+                    //@compileLog(tag);
+                    try getTypeTransformer(tag).writeReaderType(.{ .writer = writer, .typ = typ });
+                },
+            }
+        }
+    };
+}
+
 pub fn Transformer(comptime WriterType: type) type {
     return struct {
         const CapnpWriterType = CapnpWriter(WriterType);
@@ -228,42 +299,7 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn zigType(self: *Self, type_: schema.Type.Reader) Error!void {
-            const typename = switch (try type_.which()) {
-                .void => "void",
-                .bool => "bool",
-                .uint8 => "u8",
-                .uint16 => "u16",
-                .uint32 => "u32",
-                .uint64 => "u64",
-                .int8 => "i8",
-                .int16 => "i16",
-                .int32 => "i32",
-                .int64 => "i64",
-                .float32 => "f32",
-                .float64 => "f64",
-                .text => "[]const u8",
-                .data => "[]const u8",
-                .list => |list| {
-                    switch (try (try list.getElementType()).which()) {
-                        .struct_ => |struct_| {
-                            _ = struct_;
-                            try self.writer.writer.writeAll("capnp.CompositeListReader(");
-                        },
-                        else => {
-                            try self.writer.writer.writeAll("capnp.ListReader(");
-                        },
-                    }
-                    try self.zigType(try list.getElementType());
-                    try self.writer.writer.writeAll(")");
-                    return;
-                },
-                .struct_ => |struct_| self.pathTable.get(struct_.getTypeId()).?,
-                .enum_ => |enum_| self.pathTable.get(enum_.getTypeId()).?,
-                .anyPointer => "capnp.AnyPointerReader",
-
-                else => "anytype",
-            };
-            try self.writer.writer.writeAll(typename);
+            try TypeTransformers(WriterType).writeReaderType(self.writer.writer, type_);
         }
 
         pub fn print_field_type(self: *Self, field: schema.Field.Reader, comptime with_error: bool) Error!void {
