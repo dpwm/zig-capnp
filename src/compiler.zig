@@ -240,7 +240,12 @@ pub fn TypeTransformers(comptime WriterType: type) type {
 
         const Int = struct {
             pub fn writeReaderType(args: Args) !void {
-                try args.writer.writeAll("int");
+                const tagname = @tagName(try args.typ.which());
+                if (tagname[0] == 'u') {
+                    try args.writer.print("u{s}", .{tagname[4..]});
+                } else {
+                    try args.writer.print("i{s}", .{tagname[3..]});
+                }
             }
         };
 
