@@ -212,20 +212,20 @@ const ValueTypeFormatter = struct {
 pub fn TypeTransformers(comptime WriterType: type) type {
     return struct {
         const TT = @This();
-        const Error = WriterType.Error;
+        const Error = std.mem.Allocator.Error || WriterType.Error || capnp.Counter.Error;
         const Args = struct {
             writer: WriterType,
             typ: schema.Type.Reader,
         };
 
         const Void = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("void");
             }
         };
 
         const List = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("capnp.List(");
                 try TT.writeReaderType(args.writer, try (try args.typ.which()).list.getElementType());
                 try args.writer.writeAll(")");
@@ -233,13 +233,13 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         };
 
         const Bool = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("bool");
             }
         };
 
         const Int = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 const tagname = @tagName(try args.typ.which());
                 if (tagname[0] == 'u') {
                     try args.writer.print("u{s}", .{tagname[4..]});
@@ -250,13 +250,13 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         };
 
         const Data = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("[]const u8");
             }
         };
 
         const Text = struct {
-            pub fn writeReaderType(args: Args) !void {
+            pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("[]const u8");
             }
         };
@@ -273,14 +273,19 @@ pub fn TypeTransformers(comptime WriterType: type) type {
             };
         }
 
-        pub fn writeReaderType(writer: WriterType, typ: schema.Type.Reader) Transformer(WriterType).Error!void {
-            switch (typ.which() catch .void) {
+        pub fn writeWrapper(comptime name: []const u8, args: Args) Error!void {
+            switch (args.typ.which() catch .void) {
                 inline else => |x, tag| {
                     _ = x;
                     //@compileLog(tag);
-                    try getTypeTransformer(tag).writeReaderType(.{ .writer = writer, .typ = typ });
+                    const tt = getTypeTransformer(tag);
+                    try @field(tt, name)(args);
                 },
             }
+        }
+
+        pub fn writeReaderType(writer: WriterType, typ: schema.Type.Reader) Transformer(WriterType).Error!void {
+            return try writeWrapper("writeReaderType", .{ .typ = typ, .writer = writer });
         }
     };
 }
