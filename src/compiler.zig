@@ -216,6 +216,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         const Args = struct {
             writer: WriterType,
             typ: schema.Type.Reader,
+            field: ?schema.Field.Reader = null,
         };
 
         const Void = struct {
