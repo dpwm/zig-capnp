@@ -228,7 +228,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         const List = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("capnp.List(");
-                try TT.writeReaderType(args.writer, try (try args.typ.which()).list.getElementType());
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.which()).list.getElementType() });
                 try args.writer.writeAll(")");
             }
         };
@@ -285,8 +285,8 @@ pub fn TypeTransformers(comptime WriterType: type) type {
             }
         }
 
-        pub fn writeReaderType(writer: WriterType, typ: schema.Type.Reader) Transformer(WriterType).Error!void {
-            return try writeWrapper("writeReaderType", .{ .typ = typ, .writer = writer });
+        pub fn writeReaderType(args: Args) Transformer(WriterType).Error!void {
+            return try writeWrapper("writeReaderType", args);
         }
     };
 }
@@ -310,7 +310,7 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn zigType(self: *Self, type_: schema.Type.Reader) Error!void {
-            try TypeTransformers(WriterType).writeReaderType(self.writer.writer, type_);
+            try TypeTransformers(WriterType).writeReaderType(.{ .writer = self.writer.writer, .typ = type_ });
         }
 
         pub fn print_field_type(self: *Self, field: schema.Field.Reader, comptime with_error: bool) Error!void {
