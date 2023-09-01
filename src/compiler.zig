@@ -223,6 +223,10 @@ pub fn TypeTransformers(comptime WriterType: type) type {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("void");
             }
+
+            pub fn writeReaderGetExpr(args: Args) Error!void {
+                try args.writer.WriteAll("void {}");
+            }
         };
 
         const List = struct {
@@ -231,11 +235,19 @@ pub fn TypeTransformers(comptime WriterType: type) type {
                 try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.which()).list.getElementType() });
                 try args.writer.writeAll(")");
             }
+
+            pub fn writeReaderGetExpr(args: Args) Error!void {
+                try args.writer.writeAll("TODO");
+            }
         };
 
         const Bool = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("bool");
+            }
+
+            pub fn writeReaderGetExpression(args: Args) Error!void {
+                try args.writer.writeAll("BOOL");
             }
         };
 
@@ -248,17 +260,29 @@ pub fn TypeTransformers(comptime WriterType: type) type {
                     try args.writer.print("i{s}", .{tagname[3..]});
                 }
             }
+
+            pub fn writeReaderGetExpression(args: Args) Error!void {
+                try args.writer.writeAll("INT");
+            }
         };
 
         const Data = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("[]const u8");
             }
+
+            pub fn writeReaderGetExpression(args: Args) Error!void {
+                try args.writer.writeAll("DATA");
+            }
         };
 
         const Text = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("[]const u8");
+            }
+
+            pub fn writeReaderGetExpression(args: Args) Error!void {
+                try args.writer.writeAll("STRING");
             }
         };
 
