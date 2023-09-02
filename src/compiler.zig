@@ -214,6 +214,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         const TT = @This();
         const Error = std.mem.Allocator.Error || WriterType.Error || capnp.Counter.Error;
         const Args = struct {
+            transformer: *Transformer(WriterType),
             writer: WriterType,
             typ: schema.Type.Reader,
             field: ?schema.Field.Reader = null,
@@ -232,12 +233,18 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         const List = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("capnp.List(");
-                try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.which()).list.getElementType() });
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.which()).list.getElementType(), .transformer = args.transformer });
                 try args.writer.writeAll(")");
             }
 
             pub fn writeReaderGetExpr(args: Args) Error!void {
-                try args.writer.writeAll("TODO");
+                try args.writer.writeAll("try self.reader.readPtrField(");
+                // try self.zigType((try list.getElementType()));
+                const slot = (try args.field.which()).slot;
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = try slot.getType() });
+                try args.writer.print(", {})", .{slot.getOffset()});
+
+                try args.writer.writeAll("");
             }
         };
 
@@ -334,7 +341,7 @@ pub fn Transformer(comptime WriterType: type) type {
         }
 
         pub fn zigType(self: *Self, type_: schema.Type.Reader) Error!void {
-            try TypeTransformers(WriterType).writeReaderType(.{ .writer = self.writer.writer, .typ = type_ });
+            try TypeTransformers(WriterType).writeReaderType(.{ .writer = self.writer.writer, .typ = type_, .transformer = self });
         }
 
         pub fn print_field_type(self: *Self, field: schema.Field.Reader, comptime with_error: bool) Error!void {
