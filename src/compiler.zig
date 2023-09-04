@@ -225,23 +225,23 @@ pub fn TypeTransformers(comptime WriterType: type) type {
                 try args.writer.writeAll("void");
             }
 
-            pub fn writeReaderGetExpr(args: Args) Error!void {
-                try args.writer.WriteAll("void {}");
+            pub fn writeReaderGetExpression(args: Args) Error!void {
+                try args.writer.writeAll("void {}");
             }
         };
 
         const List = struct {
             pub fn writeReaderType(args: Args) Error!void {
                 try args.writer.writeAll("capnp.List(");
-                try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.which()).list.getElementType(), .transformer = args.transformer });
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = try (try args.typ.?.which()).list.getElementType(), .transformer = args.transformer });
                 try args.writer.writeAll(")");
             }
 
-            pub fn writeReaderGetExpr(args: Args) Error!void {
+            pub fn writeReaderGetExpression(args: Args) Error!void {
                 try args.writer.writeAll("try self.reader.readPtrField(");
                 // try self.zigType((try list.getElementType()));
-                const slot = (try args.field.which()).slot;
-                try TT.writeReaderType(.{ .writer = args.writer, .typ = try slot.getType() });
+                const slot = (try args.field.?.which()).slot;
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = try slot.getType(), .transformer = args.transformer });
                 try args.writer.print(", {})", .{slot.getOffset()});
 
                 try args.writer.writeAll("");
@@ -260,7 +260,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
 
         const Int = struct {
             pub fn writeReaderType(args: Args) Error!void {
-                const tagname = @tagName(try args.typ.which());
+                const tagname = @tagName(try args.typ.?.which());
                 if (tagname[0] == 'u') {
                     try args.writer.print("u{s}", .{tagname[4..]});
                 } else {
@@ -306,7 +306,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         }
 
         pub fn writeWrapper(comptime name: []const u8, args: Args) Error!void {
-            switch (args.typ.which() catch .void) {
+            switch (args.typ.?.which() catch .void) {
                 inline else => |x, tag| {
                     _ = x;
                     //@compileLog(tag);
@@ -530,7 +530,7 @@ pub fn Transformer(comptime WriterType: type) type {
                 .transformer = self,
                 .writer = self.writer.writer,
                 .field = field,
-                .typ = try self,
+                .typ = null,
             });
         }
 
