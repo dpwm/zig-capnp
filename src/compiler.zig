@@ -321,7 +321,14 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         }
 
         pub fn writeReaderGetExpression(args: Args) Transformer(WriterType).Error!void {
-            return try writeWrapper("writeReaderGetExpression", args);
+            switch (try args.field.?.which()) {
+                .slot => |slot| {
+                    var args_ = args;
+                    args_.typ = try slot.getType();
+                    return try writeWrapper("writeReaderGetExpression", args_);
+                },
+                else => {},
+            }
         }
     };
 }
