@@ -327,6 +327,10 @@ pub fn TypeTransformers(comptime WriterType: type) type {
                     args_.typ = try slot.getType();
                     return try writeWrapper("writeReaderGetExpression", args_);
                 },
+                .group => |group| {
+                    _ = group;
+                    try args.writer.writeAll("GROUP");
+                },
                 else => {},
             }
         }
