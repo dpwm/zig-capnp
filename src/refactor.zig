@@ -26,10 +26,8 @@ pub fn Refactor(comptime W: type) type {
         };
 
         const Void = struct {
-            t: Type,
-
-            pub fn readerType(self: @This()) Type.Error!void {
-                try self.t.writer.writeAll("void");
+            pub fn readerType(t: Type) Type.Error!void {
+                try t.writer.writeAll("void");
             }
         };
 
@@ -37,10 +35,16 @@ pub fn Refactor(comptime W: type) type {
             reader: schema.Type.Reader,
             writer: W,
 
-            pub fn getTypeTransformer(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
+            pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
                 return switch (typ) {
                     else => Void,
                 };
+            }
+
+            pub fn readerType(self: @This()) Type.Error!void {
+                switch (try self.reader.which()) {
+                    inline else => |_, t| get(t).readerType(t),
+                }
             }
         };
     };
