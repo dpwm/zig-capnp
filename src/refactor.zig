@@ -31,12 +31,19 @@ pub fn Refactor(comptime W: type) type {
             }
         };
 
+        const Float32 = struct {
+            pub fn readerType(t: Type) Type.Error!void {
+                try t.writer.writeAll("f32");
+            }
+        };
+
         const Type = struct {
             reader: schema.Type.Reader,
             writer: W,
 
             pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
                 return switch (typ) {
+                    .float32 => Float32,
                     else => Void,
                 };
             }
