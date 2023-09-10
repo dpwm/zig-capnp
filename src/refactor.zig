@@ -25,17 +25,13 @@ pub fn Refactor(comptime W: type) type {
             }
         };
 
-        const Void = struct {
-            pub fn readerType(t: Type) Type.Error!void {
-                try t.writer.writeAll("void");
-            }
-        };
-
-        const Float32 = struct {
-            pub fn readerType(t: Type) Type.Error!void {
-                try t.writer.writeAll("f32");
-            }
-        };
+        fn Z(comptime T: type) type {
+            return struct {
+                pub fn readerType(t: Type) Type.Error!void {
+                    try t.writer.writeAll(@typeName(T));
+                }
+            };
+        }
 
         const Type = struct {
             reader: schema.Type.Reader,
@@ -43,8 +39,9 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
                 return switch (typ) {
-                    .float32 => Float32,
-                    else => Void,
+                    .float32 => Z(f32),
+                    .float64 => Z(f64),
+                    else => Z(void),
                 };
             }
 
