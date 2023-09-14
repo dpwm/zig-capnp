@@ -33,6 +33,8 @@ pub fn Refactor(comptime W: type) type {
             };
         }
 
+        // Idea: Create type combinators
+
         const Type = struct {
             reader: schema.Type.Reader,
             writer: W,

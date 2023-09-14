@@ -2,7 +2,7 @@ const std = @import("std");
 const capnp = @import("capnp.zig");
 const schema = @import("schema.zig");
 const Allocator = std.mem.Allocator;
-const Refactor = @import("refactor.zig");
+const Refactor = @import("refactor.zig").Refactor();
 
 const NodeIdMap = std.AutoHashMap(u64, schema.Node.Reader);
 
