@@ -35,6 +35,8 @@ pub fn Refactor(comptime W: type) type {
 
         // Idea: Create type combinators
 
+        pub fn (comptime T: type, comptime T2: type) type {}
+
         const Type = struct {
             reader: schema.Type.Reader,
             writer: W,
