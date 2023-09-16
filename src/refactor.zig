@@ -35,6 +35,8 @@ pub fn Refactor(comptime W: type) type {
 
         // Idea: Create type combinators
 
+        // Idea 2: simplify output. That way we don’t need to worry about errors when calling which()
+
         pub fn (comptime T: type, comptime T2: type) type {}
 
         const Type = struct {
