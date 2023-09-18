@@ -36,6 +36,7 @@ pub fn Refactor(comptime W: type) type {
         // Idea: Create type combinators
 
         // Idea 2: simplify output. That way we don’t need to worry about errors when calling which()
+        // THis would entail which just returning an enum(u16).
 
         pub fn (comptime T: type, comptime T2: type) type {}
 
