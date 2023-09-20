@@ -33,12 +33,31 @@ pub fn Refactor(comptime W: type) type {
             };
         }
 
+        fn ReadFloat(comptime T: type) type {
+            _ = T;
+            return struct {
+                pub fn readerGetterBody(t: Type) Type.Error!void {
+                    try t.writer.writeAll("self.builder.readFloatField(f32, {})");
+                }
+            };
+        }
+
+        const _f32 = struct {
+            usingnamespace Z(f32);
+            usingnamespace ReadFloat(f32);
+        };
+
+        const _f64 = struct {
+            usingnamespace Z(f64);
+            usingnamespace ReadFloat(f64);
+        };
+
         // Idea: Create type combinators
 
         // Idea 2: simplify output. That way we don’t need to worry about errors when calling which()
         // THis would entail which just returning an enum(u16).
 
-        pub fn (comptime T: type, comptime T2: type) type {}
+        //pub fn (comptime T: type, comptime T2: type) type {}
 
         const Type = struct {
             reader: schema.Type.Reader,
@@ -46,8 +65,8 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
                 return switch (typ) {
-                    .float32 => Z(f32),
-                    .float64 => Z(f64),
+                    .float32 => _f32,
+                    .float64 => _f64,
                     else => Z(void),
                 };
             }
