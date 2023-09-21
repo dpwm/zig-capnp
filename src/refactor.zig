@@ -33,24 +33,38 @@ pub fn Refactor(comptime W: type) type {
             };
         }
 
-        fn ReadFloat(comptime T: type) type {
-            _ = T;
+        fn Float(comptime T: type) type {
             return struct {
+                usingnamespace Z(T);
+
                 pub fn readerGetterBody(t: Type) Type.Error!void {
-                    try t.writer.writeAll("self.builder.readFloatField(f32, {})");
+                    try t.writer.print("self.builder.readFloatField({s}, )", .{@typeName(T)});
                 }
             };
         }
 
-        const _f32 = struct {
-            usingnamespace Z(f32);
-            usingnamespace ReadFloat(f32);
-        };
+        fn Int(comptime T: type) type {
+            return struct {
+                usingnamespace Z(T);
 
-        const _f64 = struct {
-            usingnamespace Z(f64);
-            usingnamespace ReadFloat(f64);
-        };
+                pub fn readerGetterBody(t: Type) Type.Error!void {
+                    try t.writer.print("self.builder.readIntField({s}, )", .{@typeName(T)});
+                }
+            };
+        }
+
+        const _float32 = Float(f32);
+        const _float64 = Float(f64);
+
+        const _int64 = Int(i64);
+        const _int32 = Int(i32);
+        const _int16 = Int(i16);
+        const _int8 = Int(i8);
+
+        const _uint64 = Int(u64);
+        const _uint32 = Int(u32);
+        const _uint16 = Int(u16);
+        const _uint8 = Int(u8);
 
         // Idea: Create type combinators
 
@@ -65,9 +79,9 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
                 return switch (typ) {
-                    .float32 => _f32,
-                    .float64 => _f64,
-                    else => Z(void),
+                    inline else => |_, v| {
+                        _ = v;
+                    },
                 };
             }
 

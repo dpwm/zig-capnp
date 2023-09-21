@@ -233,25 +233,21 @@ pub const UnionTest = struct {
         .dataWords = 1,
         .ptrWords = 0,
     };
+
+    pub const Tag = enum(u16) {
+        void,
+        int32,
+        _,
+    };
+
     pub const Reader = struct {
         reader: capnp.Struct.Reader,
 
-        pub const _Tag = union(enum) {
-            void,
-            int32: i32,
-            _other: u16,
-        };
-
-        pub fn which(self: Reader) _Tag {
-            const t = self.reader.readIntField(u16, 0);
-            return switch (t) {
-                0 => .void,
-                1 => .{ .int32 = self.reader.readIntField(i32, 1) },
-                else => .{ ._other = t },
-            };
+        pub fn which(self: Reader) Tag {
+            return @enumFromInt(self.reader.readIntField(u16, 0));
         }
 
-        pub fn getInt32(self: Reader) u32 {
+        pub fn getInt32(self: Reader) i32 {
             std.debug.assert(self.getTag() == .int32);
             return self.reader.readIntField(i32, 1);
         }
@@ -260,14 +256,13 @@ pub const UnionTest = struct {
     pub const Builder = struct {
         builder: capnp.Struct.Builder,
 
-        pub const _Tag = union(enum) {
-            void,
-            int32: i32,
-            _: u16,
-        };
-
         pub fn setVoid(self: *Builder) void {
             self.builder.writeIntField(u16, 0, 0);
+        }
+
+        pub fn getInt32(self: *Builder) i32 {
+            std.debug.assert(self.which() == .int32);
+            return self.builder.readIntField(i32, 1);
         }
 
         pub fn setInt32(self: *Builder, value: i32) void {
@@ -275,13 +270,8 @@ pub const UnionTest = struct {
             self.builder.writeIntField(i32, 1, value);
         }
 
-        pub fn which(self: *Builder) _Tag {
-            const t = self.builder.readIntField(u16, 0);
-            return switch (t) {
-                0 => .void,
-                1 => .{ .int32 = self.builder.readIntField(i32, 1) },
-                else => .{ ._ = t },
-            };
+        pub fn which(self: *Builder) Tag {
+            return @enumFromInt(self.builder.readIntField(u16, 0));
         }
     };
 };
@@ -337,20 +327,23 @@ test "struct with union (building)" {
     {
         var x = list.get(0);
         x.setInt32(77);
-        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 77 }, x.which());
+        try std.testing.expectEqual(UnionTest.Tag.int32, x.which());
+        try std.testing.expectEqual(@as(i32, 77), x.getInt32());
     }
     {
         var x = list.get(1);
         x.setInt32(88);
-        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 88 }, x.which());
+        try std.testing.expectEqual(UnionTest.Tag.int32, x.which());
+        try std.testing.expectEqual(@as(i32, 88), x.getInt32());
 
         x.setVoid();
-        try std.testing.expectEqual(UnionTest.Builder._Tag.void, x.which());
+        try std.testing.expectEqual(UnionTest.Tag.void, x.which());
     }
     {
         var x = list.get(2);
         x.setInt32(99);
-        try std.testing.expectEqual(UnionTest.Builder._Tag{ .int32 = 99 }, x.which());
+        try std.testing.expectEqual(UnionTest.Tag.int32, x.which());
+        try std.testing.expectEqual(@as(i32, 99), x.getInt32());
     }
 }
 
