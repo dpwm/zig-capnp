@@ -710,21 +710,6 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.writer.closeStruct();
                     }
 
-                    { // Write Builder
-                        try self.writer.openStruct("Builder");
-                        try self.writer.writeLine("builder: capnp.StructBuilder,\n");
-
-                        {
-                            const fields = try struct_.getFields();
-                            var fields_it = fields.iter();
-                            while (fields_it.next()) |field| {
-                                try self.print_builder_field(field);
-                            }
-                        }
-
-                        try self.writer.closeStruct();
-                    }
-
                     try self.writer.closeStruct();
                 },
 

@@ -475,211 +475,183 @@ pub const Method = struct {
 pub const Type = struct {
     const id: u64 = 0xd07378ede1f9cc60;
 
-    pub const _Group = struct {
-        pub const List = struct {
-            const id: u64 = 0x87e739250a60ea97;
+    pub const List = struct {
+        const id: u64 = 0x87e739250a60ea97;
 
-            pub const _Group = struct {};
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
-                pub fn getElementType(self: @This()) capnp.Error!_Root.Type.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
-                }
-            };
+            pub fn getElementType(self: @This()) capnp.Error!_Root.Type.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
+            }
         };
+    };
 
-        pub const Enum = struct {
-            const id: u64 = 0x9e0e78711a7f87a9;
+    pub const Enum = struct {
+        const id: u64 = 0x9e0e78711a7f87a9;
 
-            pub const _Group = struct {};
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+            pub fn getTypeId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 1) ^ 0;
+            }
 
-                pub fn getTypeId(self: @This()) u64 {
-                    return self.reader.readIntField(u64, 1) ^ 0;
-                }
-
-                pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
-                }
-            };
+            pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
+            }
         };
+    };
 
-        pub const Struct = struct {
-            const id: u64 = 0xac3a6f60ef4cc6d3;
+    pub const Struct = struct {
+        const id: u64 = 0xac3a6f60ef4cc6d3;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub fn getTypeId(self: @This()) u64 {
-                    return self.reader.readIntField(u64, 1) ^ 0;
-                }
+            pub fn getTypeId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 1) ^ 0;
+            }
 
-                pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
-                }
-            };
+            pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
+            }
         };
+    };
 
-        pub const Interface = struct {
-            const id: u64 = 0xed8bca69f7fb0cbf;
+    pub const Interface = struct {
+        const id: u64 = 0xed8bca69f7fb0cbf;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub fn getTypeId(self: @This()) u64 {
-                    return self.reader.readIntField(u64, 1) ^ 0;
-                }
+            pub fn getTypeId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 1) ^ 0;
+            }
 
-                pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
-                }
-            };
+            pub fn getBrand(self: @This()) capnp.Error!_Root.Brand.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 0) };
+            }
         };
+    };
 
-        pub const AnyPointer = struct {
-            const id: u64 = 0xc2573fe8a23e49f1;
+    pub const AnyPointer = struct {
+        const id: u64 = 0xc2573fe8a23e49f1;
 
-            pub const _Group = struct {
-                pub const Unconstrained = struct {
-                    const id: u64 = 0x8e3b5f79fe593656;
-
-                    pub const _Group = struct {};
-
-                    pub const Reader = struct {
-                        reader: capnp.StructReader,
-
-                        pub const _Tag = union(enum) {
-                            anyKind: void,
-                            struct_: void,
-                            list: void,
-                            capability: void,
-                            _: u16,
-                        };
-
-                        pub fn which(self: @This()) capnp.Error!_Tag {
-                            return switch (self.reader.readIntField(u16, 5)) {
-                                0 => _Tag{ .anyKind = void{} },
-                                1 => _Tag{ .struct_ = void{} },
-                                2 => _Tag{ .list = void{} },
-                                3 => _Tag{ .capability = void{} },
-                                else => |n| _Tag{ ._ = n },
-                            };
-                        }
-                    };
-                };
-
-                pub const Parameter = struct {
-                    const id: u64 = 0x9dd1f724f4614a85;
-
-                    pub const _Group = struct {};
-
-                    pub const Reader = struct {
-                        reader: capnp.StructReader,
-
-                        pub fn getScopeId(self: @This()) u64 {
-                            return self.reader.readIntField(u64, 2) ^ 0;
-                        }
-
-                        pub fn getParameterIndex(self: @This()) u16 {
-                            return self.reader.readIntField(u16, 5) ^ 0;
-                        }
-                    };
-                };
-
-                pub const ImplicitMethodParameter = struct {
-                    const id: u64 = 0xbaefc9120c56e274;
-
-                    pub const _Group = struct {};
-
-                    pub const Reader = struct {
-                        reader: capnp.StructReader,
-
-                        pub fn getParameterIndex(self: @This()) u16 {
-                            return self.reader.readIntField(u16, 5) ^ 0;
-                        }
-                    };
-                };
-            };
-
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
+        pub const _Group = struct {
+            pub const Unconstrained = struct {
                 pub const _Tag = union(enum) {
-                    unconstrained: _Root.Type._Group.AnyPointer._Group.Unconstrained.Reader,
-                    parameter: _Root.Type._Group.AnyPointer._Group.Parameter.Reader,
-                    implicitMethodParameter: _Root.Type._Group.AnyPointer._Group.ImplicitMethodParameter.Reader,
+                    anyKind: void,
+                    struct_: void,
+                    list: void,
+                    capability: void,
                     _: u16,
                 };
 
-                pub fn which(self: @This()) capnp.Error!_Tag {
-                    return switch (self.reader.readIntField(u16, 4)) {
-                        0 => _Tag{ .unconstrained = .{ .reader = self.reader } },
-                        1 => _Tag{ .parameter = .{ .reader = self.reader } },
-                        2 => _Tag{ .implicitMethodParameter = .{ .reader = self.reader } },
-                        else => |n| _Tag{ ._ = n },
-                    };
-                }
+                const id: u64 = 0x8e3b5f79fe593656;
+
+                pub const _Group = struct {};
+
+                pub const Reader = struct {
+                    reader: capnp.StructReader,
+
+                    pub fn which(self: @This()) capnp.Error!_Tag {
+                        return switch (self.reader.readIntField(u16, 5)) {
+                            0 => _Tag{ .anyKind = void{} },
+                            1 => _Tag{ .struct_ = void{} },
+                            2 => _Tag{ .list = void{} },
+                            3 => _Tag{ .capability = void{} },
+                            else => |n| _Tag{ ._ = n },
+                        };
+                    }
+                };
+            };
+
+            pub const Parameter = struct {
+                const id: u64 = 0x9dd1f724f4614a85;
+
+                pub const _Group = struct {};
+
+                pub const Reader = struct {
+                    reader: capnp.StructReader,
+
+                    pub fn getScopeId(self: @This()) u64 {
+                        return self.reader.readIntField(u64, 2) ^ 0;
+                    }
+
+                    pub fn getParameterIndex(self: @This()) u16 {
+                        return self.reader.readIntField(u16, 5) ^ 0;
+                    }
+                };
+            };
+
+            pub const ImplicitMethodParameter = struct {
+                const id: u64 = 0xbaefc9120c56e274;
+
+                pub const _Group = struct {};
+
+                pub const Reader = struct {
+                    reader: capnp.StructReader,
+
+                    pub fn getParameterIndex(self: @This()) u16 {
+                        return self.reader.readIntField(u16, 5) ^ 0;
+                    }
+                };
             };
         };
+
+        pub const Reader = struct {
+            reader: capnp.StructReader,
+
+            pub const _Tag = union(enum) {
+                unconstrained: _Root.Type._Group.AnyPointer._Group.Unconstrained.Reader,
+                parameter: _Root.Type._Group.AnyPointer._Group.Parameter.Reader,
+                implicitMethodParameter: _Root.Type._Group.AnyPointer._Group.ImplicitMethodParameter.Reader,
+                _: u16,
+            };
+
+            pub fn which(self: @This()) capnp.Error!_Tag {
+                return switch (self.reader.readIntField(u16, 4)) {
+                    0 => _Tag{ .unconstrained = .{ .reader = self.reader } },
+                    1 => _Tag{ .parameter = .{ .reader = self.reader } },
+                    2 => _Tag{ .implicitMethodParameter = .{ .reader = self.reader } },
+                    else => |n| _Tag{ ._ = n },
+                };
+            }
+        };
+    };
+
+    pub const Tag = enum(u16) {
+        void,
+        bool,
+        int8,
+        int16,
+        int32,
+        int64,
+        uint8,
+        uint16,
+        uint32,
+        uint64,
+        float32,
+        float64,
+        text,
+        data,
+        list,
+        enum_,
+        struct_,
+        interface,
+        anyPointer,
     };
 
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub const _Tag = union(enum) {
-            void: void,
-            bool: void,
-            int8: void,
-            int16: void,
-            int32: void,
-            int64: void,
-            uint8: void,
-            uint16: void,
-            uint32: void,
-            uint64: void,
-            float32: void,
-            float64: void,
-            text: void,
-            data: void,
-            list: _Root.Type._Group.List.Reader,
-            enum_: _Root.Type._Group.Enum.Reader,
-            struct_: _Root.Type._Group.Struct.Reader,
-            interface: _Root.Type._Group.Interface.Reader,
-            anyPointer: _Root.Type._Group.AnyPointer.Reader,
-            _: u16,
-        };
-
-        pub fn which(self: @This()) capnp.Error!_Tag {
-            return switch (self.reader.readIntField(u16, 0)) {
-                0 => _Tag{ .void = void{} },
-                1 => _Tag{ .bool = void{} },
-                2 => _Tag{ .int8 = void{} },
-                3 => _Tag{ .int16 = void{} },
-                4 => _Tag{ .int32 = void{} },
-                5 => _Tag{ .int64 = void{} },
-                6 => _Tag{ .uint8 = void{} },
-                7 => _Tag{ .uint16 = void{} },
-                8 => _Tag{ .uint32 = void{} },
-                9 => _Tag{ .uint64 = void{} },
-                10 => _Tag{ .float32 = void{} },
-                11 => _Tag{ .float64 = void{} },
-                12 => _Tag{ .text = void{} },
-                13 => _Tag{ .data = void{} },
-                14 => _Tag{ .list = .{ .reader = self.reader } },
-                15 => _Tag{ .enum_ = .{ .reader = self.reader } },
-                16 => _Tag{ .struct_ = .{ .reader = self.reader } },
-                17 => _Tag{ .interface = .{ .reader = self.reader } },
-                18 => _Tag{ .anyPointer = .{ .reader = self.reader } },
-                else => |n| _Tag{ ._ = n },
-            };
+        pub fn which(self: @This()) Tag {
+            return @enumFromInt(self.reader.readIntField(u16, 0));
         }
     };
 };

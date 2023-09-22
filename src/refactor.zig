@@ -2,10 +2,12 @@
 
 const schema = @import("schema.zig");
 const std = @import("std");
+const capnp = @import("capnp.zig");
 
 pub fn Refactor(comptime W: type) type {
     return struct {
         const E = W.Error;
+        const Self = @This();
 
         const Indenter = struct {
             level: usize = 0,
@@ -27,7 +29,7 @@ pub fn Refactor(comptime W: type) type {
 
         fn Z(comptime T: type) type {
             return struct {
-                pub fn readerType(t: Type) Type.Error!void {
+                pub fn readerType(t: Type) E!void {
                     try t.writer.writeAll(@typeName(T));
                 }
             };
@@ -37,7 +39,7 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(t: Type) Type.Error!void {
+                pub fn readerGetterBody(t: Type) E!void {
                     try t.writer.print("self.builder.readFloatField({s}, )", .{@typeName(T)});
                 }
             };
@@ -47,24 +49,40 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(t: Type) Type.Error!void {
+                pub fn readerGetterBody(t: Type) E!void {
                     try t.writer.print("self.builder.readIntField({s}, )", .{@typeName(T)});
                 }
             };
         }
 
-        const _float32 = Float(f32);
-        const _float64 = Float(f64);
+        const TypeRegistry = struct {
+            const _void = Z(void);
 
-        const _int64 = Int(i64);
-        const _int32 = Int(i32);
-        const _int16 = Int(i16);
-        const _int8 = Int(i8);
+            const _bool = Z(bool);
 
-        const _uint64 = Int(u64);
-        const _uint32 = Int(u32);
-        const _uint16 = Int(u16);
-        const _uint8 = Int(u8);
+            const _text = Z([]const u8);
+            const _data = Z([]const u8);
+
+            const _float32 = Float(f32);
+            const _float64 = Float(f64);
+
+            const _int64 = Int(i64);
+            const _int32 = Int(i32);
+            const _int16 = Int(i16);
+            const _int8 = Int(i8);
+
+            const _uint64 = Int(u64);
+            const _uint32 = Int(u32);
+            const _uint16 = Int(u16);
+            const _uint8 = Int(u8);
+
+            const _list = _void;
+            const _enum = _void;
+            const _struct_ = _void;
+            const _interface = _void;
+            const _enum_ = _void;
+            const _anyPointer = _void;
+        };
 
         // Idea: Create type combinators
 
@@ -73,23 +91,46 @@ pub fn Refactor(comptime W: type) type {
 
         //pub fn (comptime T: type, comptime T2: type) type {}
 
-        const Type = struct {
+        pub const Type = struct {
             reader: schema.Type.Reader,
             writer: W,
 
-            pub fn get(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
-                return switch (typ) {
-                    inline else => |_, v| {
-                        _ = v;
-                    },
-                };
+            pub fn get(comptime typ: schema.Type.Tag) type {
+                return @field(TypeRegistry, "_" ++ @tagName(typ));
             }
 
-            pub fn readerType(self: @This()) Type.Error!void {
-                switch (try self.reader.which()) {
-                    inline else => |_, t| get(t).readerType(t),
+            pub fn readerType(self: Type) E!void {
+                switch (self.reader.which()) {
+                    inline else => |t| {
+                        try get(t).readerType(self);
+                    },
                 }
+            }
+
+            pub fn readerGetterBody(self: Type) E!void {
+                _ = self;
             }
         };
     };
+}
+
+test "simple" {
+    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
+    const M = Refactor(@TypeOf(writer));
+
+    var file = try std.fs.cwd().openFile("capnp-tests/08-schema-examples.void.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+    const s = try message.getRootStruct(schema.Type);
+
+    const typ = (M.Type{ .reader = s, .writer = writer });
+
+    try typ.readerType();
+
+    try std.testing.expectEqualStrings("void", fbs.getWritten());
 }
