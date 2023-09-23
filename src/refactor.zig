@@ -6,7 +6,7 @@ const capnp = @import("capnp.zig");
 
 pub fn Refactor(comptime W: type) type {
     return struct {
-        const E = W.Error;
+        const E = W.Error || capnp.Error;
         const Self = @This();
 
         const Indenter = struct {
@@ -40,7 +40,7 @@ pub fn Refactor(comptime W: type) type {
                 usingnamespace Z(T);
 
                 pub fn readerGetterBody(field: Field) E!void {
-                    try t.writer.print("self.reader.readFloatField({s}, )", .{@typeName(T)});
+                    try field.writer.print("self.reader.readFloatField({s}, )", .{@typeName(T)});
                 }
             };
         }
@@ -49,15 +49,21 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(Field: Field) E!void {
-                    try t.writer.print("self.reader.readIntField({s}, )", .{@typeName(T)});
+                pub fn readerGetterBody(field: Field) E!void {
+                    try field.writer.print("self.reader.readIntField({s}, )", .{@typeName(T)});
                 }
             };
         }
 
         const List = struct {
-            pub fn readerType(t: type) E!void {
-                try t.writer.print("capnp.ListReader({})", .{});
+            pub fn readerType(t: Type) E!void {
+                const t2 = try t.reader.getList();
+                try t.writer.writeAll("capnp.ListReader(");
+                try Type.readerType(.{
+                    .reader = try t2.?.getElementType(),
+                    .writer = t.writer,
+                });
+                try t.writer.writeAll(")");
             }
         };
 

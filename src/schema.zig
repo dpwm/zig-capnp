@@ -653,6 +653,14 @@ pub const Type = struct {
         pub fn which(self: @This()) Tag {
             return @enumFromInt(self.reader.readIntField(u16, 0));
         }
+
+        pub fn getList(self: @This()) capnp.Error!?Type.List.Reader {
+            if (self.which() == Tag.list) {
+                return .{ .reader = self.reader };
+            } else {
+                return null;
+            }
+        }
     };
 };
 
