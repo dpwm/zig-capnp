@@ -39,8 +39,8 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(t: Type) E!void {
-                    try t.writer.print("self.builder.readFloatField({s}, )", .{@typeName(T)});
+                pub fn readerGetterBody(field: Field) E!void {
+                    try t.writer.print("self.reader.readFloatField({s}, )", .{@typeName(T)});
                 }
             };
         }
@@ -49,18 +49,24 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(t: Type) E!void {
-                    try t.writer.print("self.builder.readIntField({s}, )", .{@typeName(T)});
+                pub fn readerGetterBody(Field: Field) E!void {
+                    try t.writer.print("self.reader.readIntField({s}, )", .{@typeName(T)});
                 }
             };
         }
+
+        const List = struct {
+            pub fn readerType(t: type) E!void {
+                try t.writer.print("capnp.ListReader({})", .{});
+            }
+        };
 
         const TypeRegistry = struct {
             const _void = Z(void);
 
             const _bool = Z(bool);
 
-            const _text = Z([]const u8);
+            const _text = Z([:0]const u8);
             const _data = Z([]const u8);
 
             const _float32 = Float(f32);
@@ -76,7 +82,7 @@ pub fn Refactor(comptime W: type) type {
             const _uint16 = Int(u16);
             const _uint8 = Int(u8);
 
-            const _list = _void;
+            const _list = List;
             const _enum = _void;
             const _struct_ = _void;
             const _interface = _void;
@@ -106,6 +112,11 @@ pub fn Refactor(comptime W: type) type {
                     },
                 }
             }
+        };
+
+        pub const Field = struct {
+            reader: schema.Field.Reader,
+            writer: W,
 
             pub fn readerGetterBody(self: Type) E!void {
                 _ = self;
