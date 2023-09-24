@@ -50,20 +50,33 @@ pub fn Refactor(comptime W: type) type {
                 usingnamespace Z(T);
 
                 pub fn readerGetterBody(field: Field) E!void {
-                    try field.writer.print("self.reader.readIntField({s}, )", .{@typeName(T)});
+                    try field.writer.print("self.reader.readIntField({s}, {})", .{ @typeName(T), field.getSlot().getOffset() });
                 }
             };
         }
 
         const List = struct {
             pub fn readerType(t: Type) E!void {
-                const t2 = try t.reader.getList();
                 try t.writer.writeAll("capnp.ListReader(");
                 try Type.readerType(.{
-                    .reader = try t2.?.getElementType(),
+                    .reader = try t.reader.getList().?.getElementType(),
                     .writer = t.writer,
                 });
                 try t.writer.writeAll(")");
+            }
+        };
+
+        const Struct = struct {
+            pub fn readerType(t: Type) E!void {
+                // TODO: stub
+                _ = t;
+            }
+        };
+
+        const Enum = struct {
+            pub fn readerType(t: Type) E!void {
+                // TODO: stub
+                _ = t;
             }
         };
 
@@ -89,8 +102,8 @@ pub fn Refactor(comptime W: type) type {
             const _uint8 = Int(u8);
 
             const _list = List;
-            const _enum = _void;
-            const _struct_ = _void;
+            const _enum = Enum;
+            const _struct_ = Struct;
             const _interface = _void;
             const _enum_ = _void;
             const _anyPointer = _void;
@@ -118,6 +131,10 @@ pub fn Refactor(comptime W: type) type {
                     },
                 }
             }
+
+            pub fn withReader(self: Field, reader: schema.Field.Reader) Field {
+                return .{ .reader = reader, .writer = self.writer };
+            }
         };
 
         pub const Field = struct {
@@ -126,6 +143,10 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn readerGetterBody(self: Type) E!void {
                 _ = self;
+            }
+
+            pub fn withReader(self: Field, reader: schema.Field.Reader) Field {
+                return .{ .reader = reader, .writer = self.writer };
             }
         };
     };

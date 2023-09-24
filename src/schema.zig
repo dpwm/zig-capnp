@@ -286,88 +286,91 @@ pub const Node = struct {
 pub const Field = struct {
     const id: u64 = 0x9aad50a41f4af45f;
 
-    pub const _Group = struct {
-        pub const Slot = struct {
-            const id: u64 = 0xc42305476bb4746f;
+    pub const slot = struct {
+        const id: u64 = 0xc42305476bb4746f;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub fn getOffset(self: @This()) u32 {
-                    return self.reader.readIntField(u32, 1) ^ 0;
-                }
+            pub fn getOffset(self: @This()) u32 {
+                return self.reader.readIntField(u32, 1) ^ 0;
+            }
 
-                pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 2) };
-                }
+            pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 2) };
+            }
 
-                pub fn getDefaultValue(self: @This()) capnp.Error!_Root.Value.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
-                }
+            pub fn getDefaultValue(self: @This()) capnp.Error!_Root.Value.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
+            }
 
-                pub fn getHadExplicitDefault(self: @This()) bool {
-                    return self.reader.readBoolField(128);
-                }
-            };
+            pub fn getHadExplicitDefault(self: @This()) bool {
+                return self.reader.readBoolField(128);
+            }
         };
+    };
 
-        pub const Group = struct {
-            const id: u64 = 0xcafccddb68db1d11;
+    pub const group = struct {
+        const id: u64 = 0xcafccddb68db1d11;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub fn getTypeId(self: @This()) u64 {
-                    return self.reader.readIntField(u64, 2) ^ 0;
-                }
-            };
+            pub fn getTypeId(self: @This()) u64 {
+                return self.reader.readIntField(u64, 2) ^ 0;
+            }
         };
+    };
 
-        pub const Ordinal = struct {
-            const id: u64 = 0xbb90d5c287870be6;
+    pub const ordinal = struct {
+        const id: u64 = 0xbb90d5c287870be6;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub const _Tag = union(enum) {
-                    implicit: void,
-                    explicit: u16,
-                    _: u16,
+            pub const _Tag = union(enum) {
+                implicit: void,
+                explicit: u16,
+                _: u16,
+            };
+
+            pub fn which(self: @This()) capnp.Error!_Tag {
+                return switch (self.reader.readIntField(u16, 5)) {
+                    0 => _Tag{ .implicit = void{} },
+                    1 => _Tag{ .explicit = self.reader.readIntField(u16, 6) ^ 0 },
+                    else => |n| _Tag{ ._ = n },
                 };
-
-                pub fn which(self: @This()) capnp.Error!_Tag {
-                    return switch (self.reader.readIntField(u16, 5)) {
-                        0 => _Tag{ .implicit = void{} },
-                        1 => _Tag{ .explicit = self.reader.readIntField(u16, 6) ^ 0 },
-                        else => |n| _Tag{ ._ = n },
-                    };
-                }
-            };
+            }
         };
     };
 
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub const _Tag = union(enum) {
-            slot: _Root.Field._Group.Slot.Reader,
-            group: _Root.Field._Group.Group.Reader,
-            _: u16,
+        pub const Tag = enum(u16) {
+            slot,
+            group,
+            _,
         };
 
-        pub fn which(self: @This()) capnp.Error!_Tag {
-            return switch (self.reader.readIntField(u16, 4)) {
-                0 => _Tag{ .slot = .{ .reader = self.reader } },
-                1 => _Tag{ .group = .{ .reader = self.reader } },
-                else => |n| _Tag{ ._ = n },
-            };
+        pub fn which(self: @This()) Tag {
+            return @enumFromInt(self.reader.readIntField(u16, 0));
         }
+
+        pub fn getSlot(self: @This()) ?slot {
+            return .{ .reader = self.reader };
+        }
+
+        pub fn getGroup(self: @This()) ?group {
+            return .{ .reader = self.reader };
+        }
+
         pub fn getName(self: @This()) capnp.Error![]const u8 {
             return try self.reader.readStringField(0);
         }
@@ -654,7 +657,7 @@ pub const Type = struct {
             return @enumFromInt(self.reader.readIntField(u16, 0));
         }
 
-        pub fn getList(self: @This()) capnp.Error!?Type.List.Reader {
+        pub fn getList(self: @This()) ?Type.List.Reader {
             if (self.which() == Tag.list) {
                 return .{ .reader = self.reader };
             } else {
