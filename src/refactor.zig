@@ -40,7 +40,13 @@ pub fn Refactor(comptime W: type) type {
                 usingnamespace Z(T);
 
                 pub fn readerGetterBody(field: Field) E!void {
-                    try field.writer.print("self.reader.readFloatField({s}, )", .{@typeName(T)});
+                    try field.writer.print(
+                        "self.reader.readFloatField({s}, {})",
+                        .{
+                            @typeName(T),
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
                 }
             };
         }
@@ -50,7 +56,13 @@ pub fn Refactor(comptime W: type) type {
                 usingnamespace Z(T);
 
                 pub fn readerGetterBody(field: Field) E!void {
-                    try field.writer.print("self.reader.readIntField({s}, {})", .{ @typeName(T), field.getSlot().getOffset() });
+                    try field.writer.print(
+                        "self.reader.readIntField({s}, {})",
+                        .{
+                            @typeName(T),
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
                 }
             };
         }
@@ -58,10 +70,7 @@ pub fn Refactor(comptime W: type) type {
         const List = struct {
             pub fn readerType(t: Type) E!void {
                 try t.writer.writeAll("capnp.ListReader(");
-                try Type.readerType(.{
-                    .reader = try t.reader.getList().?.getElementType(),
-                    .writer = t.writer,
-                });
+                try t.withTypeReader(try t.reader.getList().?.getElementType()).readerType();
                 try t.writer.writeAll(")");
             }
         };
@@ -132,8 +141,11 @@ pub fn Refactor(comptime W: type) type {
                 }
             }
 
-            pub fn withReader(self: Field, reader: schema.Field.Reader) Field {
-                return .{ .reader = reader, .writer = self.writer };
+            pub fn withTypeReader(self: Type, reader: schema.Type.Reader) Type {
+                return .{
+                    .reader = reader,
+                    .writer = self.writer,
+                };
             }
         };
 
@@ -145,8 +157,11 @@ pub fn Refactor(comptime W: type) type {
                 _ = self;
             }
 
-            pub fn withReader(self: Field, reader: schema.Field.Reader) Field {
-                return .{ .reader = reader, .writer = self.writer };
+            pub fn withTypeReader(self: Field, reader: schema.Type.Reader) Type {
+                return .{
+                    .reader = reader,
+                    .writer = self.writer,
+                };
             }
         };
     };
