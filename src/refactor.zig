@@ -3,6 +3,90 @@
 const schema = @import("schema.zig");
 const std = @import("std");
 const capnp = @import("capnp.zig");
+const Allocator = std.mem.Allocator;
+
+const NodeIdMap = std.AutoHashMap(u64, schema.Node.Reader);
+
+const PathTable = struct {
+    const PathMap = std.AutoHashMap(u64, []const u8);
+    const Error = std.fmt.BufPrintError || Allocator.Error || capnp.Counter.Error;
+    pathMap: PathMap,
+    nodeIdMap: NodeIdMap,
+    allocator: Allocator,
+
+    pub fn init(nodeIdMap: NodeIdMap) PathTable {
+        const allocator = nodeIdMap.allocator;
+        return PathTable{ .pathMap = PathMap.init(allocator), .allocator = allocator, .nodeIdMap = nodeIdMap };
+    }
+    pub fn update(self: *PathTable, name: []const u8, nodeId: u64) Error!void {
+        const node = self.nodeIdMap.get(nodeId).?;
+
+        var path: []const u8 = "";
+        if (self.pathMap.get(node.getScopeId())) |parentName| {
+            path = try std.fmt.allocPrint(self.allocator, "{s}.{s}", .{ parentName, name });
+        } else {
+            path = try std.fmt.allocPrint(self.allocator, "{s}", .{name});
+        }
+
+        try self.pathMap.put(node.getId(), path);
+        {
+            var it = (try node.getNestedNodes()).iter();
+            while (it.next()) |nestedNode| {
+                try self.update(try nestedNode.getName(), nestedNode.getId());
+            }
+        }
+        {
+            var buffer = std.mem.zeroes([128]u8);
+            switch (try node.which()) {
+                .struct_ => |struct_| {
+                    var field_it = (try struct_.getFields()).iter();
+                    while (field_it.next()) |field| {
+                        switch (try field.which()) {
+                            .group => |group| {
+                                const groupName = try std.fmt.bufPrint(&buffer, "_Group.{}", .{Capitalized.wrap(try field.getName())});
+                                try self.update(groupName, group.getTypeId());
+                            },
+                            else => {},
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+
+    pub fn get(self: PathTable, id: u64) ?[]const u8 {
+        return self.pathMap.get(id);
+    }
+
+    pub fn updateFile(self: *PathTable, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
+        try self.update("_Root", requestedFile.getId());
+    }
+
+    pub fn deinit(self: *PathTable) void {
+        var it = self.pathMap.valueIterator();
+        while (it.next()) |value| {
+            self.allocator.free(value.*);
+        }
+        self.pathMap.deinit();
+    }
+};
+
+const Capitalized = struct {
+    str: []const u8,
+
+    pub fn wrap(str: []const u8) Capitalized {
+        return Capitalized{ .str = str };
+    }
+
+    pub fn format(value: Capitalized, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        _ = fmt;
+
+        if (value.str.len == 0) return;
+        try writer.print("{c}{s}", .{ std.ascii.toUpper(value.str[0]), value.str[1..] });
+    }
+};
 
 pub fn Refactor(comptime W: type) type {
     return struct {
@@ -77,6 +161,7 @@ pub fn Refactor(comptime W: type) type {
 
         const Struct = struct {
             pub fn readerType(t: Type) E!void {
+
                 // TODO: stub
                 _ = t;
             }
@@ -128,6 +213,7 @@ pub fn Refactor(comptime W: type) type {
         pub const Type = struct {
             reader: schema.Type.Reader,
             writer: W,
+            pathTable: *PathTable,
 
             pub fn get(comptime typ: schema.Type.Tag) type {
                 return @field(TypeRegistry, "_" ++ @tagName(typ));
@@ -145,6 +231,7 @@ pub fn Refactor(comptime W: type) type {
                 return .{
                     .reader = reader,
                     .writer = self.writer,
+                    .pathTable = self.pathTable,
                 };
             }
         };
@@ -181,7 +268,17 @@ test "simple" {
     defer message.deinit(std.testing.allocator);
     const s = try message.getRootStruct(schema.Type);
 
-    const typ = (M.Type{ .reader = s, .writer = writer });
+    var nodeTable = NodeIdMap.init(std.testing.allocator);
+    defer nodeTable.deinit();
+
+    var pathTable = PathTable.init(nodeTable);
+    defer pathTable.deinit();
+
+    const typ = (M.Type{
+        .reader = s,
+        .writer = writer,
+        .pathTable = &pathTable,
+    });
 
     try typ.readerType();
 
