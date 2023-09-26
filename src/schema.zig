@@ -664,6 +664,14 @@ pub const Type = struct {
                 return null;
             }
         }
+
+        pub fn getStruct(self: @This()) ?Type.Struct.Reader {
+            if (self.which() == Tag.struct_) {
+                return .{ .reader = self.reader };
+            } else {
+                return null;
+            }
+        }
     };
 };
 
