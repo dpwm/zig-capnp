@@ -193,10 +193,9 @@ pub fn Refactor(comptime W: type) type {
             const _uint8 = Int(u8);
 
             const _list = List;
-            const _enum = Enum;
+            const _enum_ = Enum;
             const _struct_ = Struct;
             const _interface = _void;
-            const _enum_ = _void;
             const _anyPointer = _void;
         };
 
