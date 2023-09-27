@@ -167,8 +167,7 @@ pub fn Refactor(comptime W: type) type {
 
         const Enum = struct {
             pub fn readerType(t: Type) E!void {
-                // TODO: stub
-                _ = t;
+                try t.writer.writeAll(t.pathTable.get(t.reader.getEnum().?.getTypeId()).?);
             }
         };
 

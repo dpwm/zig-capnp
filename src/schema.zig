@@ -658,19 +658,15 @@ pub const Type = struct {
         }
 
         pub fn getList(self: @This()) ?Type.List.Reader {
-            if (self.which() == Tag.list) {
-                return .{ .reader = self.reader };
-            } else {
-                return null;
-            }
+            return if (self.which() == Tag.list) .{ .reader = self.reader } else null;
         }
 
         pub fn getStruct(self: @This()) ?Type.Struct.Reader {
-            if (self.which() == Tag.struct_) {
-                return .{ .reader = self.reader };
-            } else {
-                return null;
-            }
+            return if (self.which() == Tag.struct_) .{ .reader = self.reader } else null;
+        }
+
+        pub fn getEnum(self: @This()) ?Type.Struct.Reader {
+            return if (self.which() == Tag.enum_) .{ .reader = self.reader } else null;
         }
     };
 };
