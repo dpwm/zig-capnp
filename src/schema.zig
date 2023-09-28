@@ -286,6 +286,12 @@ pub const Node = struct {
 pub const Field = struct {
     const id: u64 = 0x9aad50a41f4af45f;
 
+    pub const Tag = enum(u16) {
+        slot,
+        group,
+        _,
+    };
+
     pub const slot = struct {
         const id: u64 = 0xc42305476bb4746f;
 
@@ -353,13 +359,7 @@ pub const Field = struct {
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub const Tag = enum(u16) {
-            slot,
-            group,
-            _,
-        };
-
-        pub fn which(self: @This()) Tag {
+        pub fn which(self: @This()) Field.Tag {
             return @enumFromInt(self.reader.readIntField(u16, 0));
         }
 
@@ -387,7 +387,7 @@ pub const Field = struct {
             return self.reader.readIntField(u16, 1) ^ 65535;
         }
 
-        pub fn getOrdinal(self: @This()) _Root.Field._Group.Ordinal.Reader {
+        pub fn getOrdinal(self: @This()) _Root.Field.ordinal.Reader {
             return .{ .reader = self.reader };
         }
     };

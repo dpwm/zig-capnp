@@ -43,7 +43,7 @@ const PathTable = struct {
                     while (field_it.next()) |field| {
                         switch (try field.which()) {
                             .group => |group| {
-                                const groupName = try std.fmt.bufPrint(&buffer, "_Group.{}", .{Capitalized.wrap(try field.getName())});
+                                const groupName = try std.fmt.bufPrint(&buffer, "_Group.{s}", .{try field.getName()});
                                 try self.update(groupName, group.getTypeId());
                             },
                             else => {},
@@ -235,16 +235,27 @@ pub fn Refactor(comptime W: type) type {
         pub const Field = struct {
             reader: schema.Field.Reader,
             writer: W,
-
-            pub fn readerGetterBody(self: Type) E!void {
-                _ = self;
-            }
+            pathTable: *PathTable,
 
             pub fn withTypeReader(self: Field, reader: schema.Type.Reader) Type {
                 return .{
                     .reader = reader,
                     .writer = self.writer,
+                    .pathTable = self.pathTable,
                 };
+            }
+
+            pub fn readerGetterBody(self: Type) E!void {
+                switch (self.reader.which()) {
+                    .slot => {
+                        const t = try self.reader.getSlot().?.getType();
+                        switch (t.which()) {
+                            inline else => |typeTag| {
+                                Type.get(typeTag).readerGetterBody(self);
+                            },
+                        }
+                    },
+                }
             }
         };
     };
