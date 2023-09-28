@@ -113,8 +113,8 @@ pub fn Refactor(comptime W: type) type {
 
         fn Z(comptime T: type) type {
             return struct {
-                pub fn readerType(t: Type) E!void {
-                    try t.writer.writeAll(@typeName(T));
+                pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader) E!void {
+                    try ctx.writer.writeAll(@typeName(T));
                 }
             };
         }
@@ -123,9 +123,10 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(field: Field) E!void {
-                    try field.writer.print(
-                        "self.reader.readFloatField({s}, {})",
+                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                    try ctx.writer.print("const \n", .{});
+                    try ctx.writer.print(
+                        "self.reader.readFloatField({s}, {d})",
                         .{
                             @typeName(T),
                             field.getSlot().?.getOffset(),
@@ -139,8 +140,8 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace Z(T);
 
-                pub fn readerGetterBody(field: Field) E!void {
-                    try field.writer.print(
+                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                    try ctx.writer.print(
                         "self.reader.readIntField({s}, {})",
                         .{
                             @typeName(T),
@@ -152,22 +153,22 @@ pub fn Refactor(comptime W: type) type {
         }
 
         const List = struct {
-            pub fn readerType(t: Type) E!void {
-                try t.writer.writeAll("capnp.ListReader(");
-                try t.withTypeReader(try t.reader.getList().?.getElementType()).readerType();
-                try t.writer.writeAll(")");
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+                try ctx.writer.writeAll("capnp.ListReader(");
+                try Self.readerType(ctx, try t.getList().?.getElementType());
+                try ctx.writer.writeAll(")");
             }
         };
 
         const Struct = struct {
-            pub fn readerType(t: Type) E!void {
-                try t.writer.writeAll(t.pathTable.get(t.reader.getStruct().?.getTypeId()).?);
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+                try ctx.writer.writeAll(ctx.pathTable.get(t.getStruct().?.getTypeId()).?);
             }
         };
 
         const Enum = struct {
-            pub fn readerType(t: Type) E!void {
-                try t.writer.writeAll(t.pathTable.get(t.reader.getEnum().?.getTypeId()).?);
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+                try ctx.writer.writeAll(ctx.pathTable.get(t.getEnum().?.getTypeId()).?);
             }
         };
 
@@ -197,6 +198,10 @@ pub fn Refactor(comptime W: type) type {
             const _struct_ = Struct;
             const _interface = _void;
             const _anyPointer = _void;
+
+            pub fn get(comptime typ: schema.Type.Tag) type {
+                return @field(TypeRegistry, "_" ++ @tagName(typ));
+            }
         };
 
         // Idea: Create type combinators
@@ -206,58 +211,32 @@ pub fn Refactor(comptime W: type) type {
 
         //pub fn (comptime T: type, comptime T2: type) type {}
 
-        pub const Type = struct {
-            reader: schema.Type.Reader,
+        pub const WriteContext = struct {
             writer: W,
-            pathTable: *PathTable,
-
-            pub fn get(comptime typ: schema.Type.Tag) type {
-                return @field(TypeRegistry, "_" ++ @tagName(typ));
-            }
-
-            pub fn readerType(self: Type) E!void {
-                switch (self.reader.which()) {
-                    inline else => |t| {
-                        try get(t).readerType(self);
-                    },
-                }
-            }
-
-            pub fn withTypeReader(self: Type, reader: schema.Type.Reader) Type {
-                return .{
-                    .reader = reader,
-                    .writer = self.writer,
-                    .pathTable = self.pathTable,
-                };
-            }
+            indenter: Indenter,
+            pathTable: PathTable,
         };
 
-        pub const Field = struct {
-            reader: schema.Field.Reader,
-            writer: W,
-            pathTable: *PathTable,
-
-            pub fn withTypeReader(self: Field, reader: schema.Type.Reader) Type {
-                return .{
-                    .reader = reader,
-                    .writer = self.writer,
-                    .pathTable = self.pathTable,
-                };
+        pub fn readerType(ctx: *WriteContext, reader: schema.Type.Reader) E!void {
+            switch (reader.which()) {
+                inline else => |t| {
+                    try TypeRegistry.get(t).readerType(ctx, reader);
+                },
             }
+        }
 
-            pub fn readerGetterBody(self: Type) E!void {
-                switch (self.reader.which()) {
-                    .slot => {
-                        const t = try self.reader.getSlot().?.getType();
-                        switch (t.which()) {
-                            inline else => |typeTag| {
-                                Type.get(typeTag).readerGetterBody(self);
-                            },
-                        }
-                    },
-                }
+        pub fn readerGetter(ctx: *WriteContext, reader: schema.Field.Reader) E!void {
+            switch (reader.which()) {
+                .slot => {
+                    const t = try reader.getSlot().?.getType();
+                    switch (t.which()) {
+                        inline else => |typeTag| {
+                            TypeRegistry.get(typeTag).readerGetter(ctx, reader);
+                        },
+                    }
+                },
             }
-        };
+        }
     };
 }
 
@@ -273,7 +252,6 @@ test "simple" {
 
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
-    const s = try message.getRootStruct(schema.Type);
 
     var nodeTable = NodeIdMap.init(std.testing.allocator);
     defer nodeTable.deinit();
@@ -281,13 +259,14 @@ test "simple" {
     var pathTable = PathTable.init(nodeTable);
     defer pathTable.deinit();
 
-    const typ = (M.Type{
-        .reader = s,
+    var ctx = M.WriteContext{
         .writer = writer,
-        .pathTable = &pathTable,
-    });
+        .indenter = M.Indenter{},
+        .pathTable = pathTable,
+    };
 
-    try typ.readerType();
+    const reader = try message.getRootStruct(schema.Type);
+    try M.readerType(&ctx, reader);
 
     try std.testing.expectEqualStrings("void", fbs.getWritten());
 }
