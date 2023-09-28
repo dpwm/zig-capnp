@@ -363,11 +363,11 @@ pub const Field = struct {
             return @enumFromInt(self.reader.readIntField(u16, 0));
         }
 
-        pub fn getSlot(self: @This()) ?slot {
+        pub fn getSlot(self: @This()) ?slot.Reader {
             return .{ .reader = self.reader };
         }
 
-        pub fn getGroup(self: @This()) ?group {
+        pub fn getGroup(self: @This()) ?group.Reader {
             return .{ .reader = self.reader };
         }
 

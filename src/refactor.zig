@@ -111,7 +111,7 @@ pub fn Refactor(comptime W: type) type {
             }
         };
 
-        fn Z(comptime T: type) type {
+        fn ZigType(comptime T: type) type {
             return struct {
                 pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader) E!void {
                     try ctx.writer.writeAll(@typeName(T));
@@ -121,7 +121,7 @@ pub fn Refactor(comptime W: type) type {
 
         fn Float(comptime T: type) type {
             return struct {
-                usingnamespace Z(T);
+                usingnamespace ZigType(T);
 
                 pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                     try ctx.writer.print("const \n", .{});
@@ -138,7 +138,7 @@ pub fn Refactor(comptime W: type) type {
 
         fn Int(comptime T: type) type {
             return struct {
-                usingnamespace Z(T);
+                usingnamespace ZigType(T);
 
                 pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                     try ctx.writer.print(
@@ -158,11 +158,21 @@ pub fn Refactor(comptime W: type) type {
                 try Self.readerType(ctx, try t.getList().?.getElementType());
                 try ctx.writer.writeAll(")");
             }
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.writeAll("return void{};");
+            }
         };
 
         const Struct = struct {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
                 try ctx.writer.writeAll(ctx.pathTable.get(t.getStruct().?.getTypeId()).?);
+            }
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.writeAll("return void{{}};");
             }
         };
 
@@ -170,15 +180,56 @@ pub fn Refactor(comptime W: type) type {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
                 try ctx.writer.writeAll(ctx.pathTable.get(t.getEnum().?.getTypeId()).?);
             }
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.writeAll("return void{};");
+            }
+        };
+
+        const Void = struct {
+            usingnamespace ZigType(void);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.writeAll("return void{};");
+            }
+        };
+
+        const Bool = struct {
+            usingnamespace ZigType(bool);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.print("return true;", .{});
+            }
+        };
+
+        const String = struct {
+            usingnamespace ZigType([:0]const u8);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.print("return \"\";", .{});
+            }
+        };
+
+        const Data = struct {
+            usingnamespace ZigType([]const u8);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.print("return \"\";", .{});
+            }
         };
 
         const TypeRegistry = struct {
-            const _void = Z(void);
+            const _void = Void;
 
-            const _bool = Z(bool);
+            const _bool = Bool;
 
-            const _text = Z([:0]const u8);
-            const _data = Z([]const u8);
+            const _text = String;
+            const _data = Data;
 
             const _float32 = Float(f32);
             const _float64 = Float(f64);
@@ -231,10 +282,12 @@ pub fn Refactor(comptime W: type) type {
                     const t = try reader.getSlot().?.getType();
                     switch (t.which()) {
                         inline else => |typeTag| {
-                            TypeRegistry.get(typeTag).readerGetter(ctx, reader);
+                            try TypeRegistry.get(typeTag).readerGetter(ctx, reader);
                         },
                     }
                 },
+                .group => {},
+                else => {},
             }
         }
     };
@@ -269,4 +322,38 @@ test "simple" {
     try M.readerType(&ctx, reader);
 
     try std.testing.expectEqualStrings("void", fbs.getWritten());
+}
+
+test "field" {
+    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
+    const M = Refactor(@TypeOf(writer));
+
+    var file = try std.fs.cwd().openFile("capnp-tests/08-schema-examples.field1.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    var nodeTable = NodeIdMap.init(std.testing.allocator);
+    defer nodeTable.deinit();
+
+    var pathTable = PathTable.init(nodeTable);
+    defer pathTable.deinit();
+
+    var ctx = M.WriteContext{
+        .writer = writer,
+        .indenter = M.Indenter{},
+        .pathTable = pathTable,
+    };
+
+    const reader = try message.getRootStruct(schema.Field);
+    try M.readerType(&ctx, try reader.getSlot().?.getType());
+
+    // try std.testing.expectEqualStrings("i32", fbs.getWritten());
+
+    try M.readerGetter(&ctx, reader);
+    try std.testing.expectEqualStrings("self.reader.readIntField(i32, 3)", fbs.getWritten()[3..]);
 }
