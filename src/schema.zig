@@ -5,159 +5,157 @@ const _Root = @This();
 pub const Node = struct {
     const id: u64 = 0xe682ab4cf923a417;
 
-    pub const _Group = struct {
-        pub const Struct = struct {
-            const id: u64 = 0x9ea0b19b37fb4435;
+    pub const struct_ = struct {
+        const id: u64 = 0x9ea0b19b37fb4435;
 
-            pub const _Group = struct {};
+        pub const _Group = struct {};
 
-            pub const Reader = struct {
-                reader: capnp.StructReader,
+        pub const Reader = struct {
+            reader: capnp.StructReader,
 
-                pub fn getDataWordCount(self: @This()) u16 {
-                    return self.reader.readIntField(u16, 7) ^ 0;
-                }
+            pub fn getDataWordCount(self: @This()) u16 {
+                return self.reader.readIntField(u16, 7) ^ 0;
+            }
 
-                pub fn getPointerCount(self: @This()) u16 {
-                    return self.reader.readIntField(u16, 12) ^ 0;
-                }
+            pub fn getPointerCount(self: @This()) u16 {
+                return self.reader.readIntField(u16, 12) ^ 0;
+            }
 
-                pub fn getPreferredListEncoding(self: @This()) _Root.ElementSize {
-                    return @enumFromInt(self.reader.readIntField(u16, 13) ^ 0);
-                }
+            pub fn getPreferredListEncoding(self: @This()) _Root.ElementSize {
+                return @enumFromInt(self.reader.readIntField(u16, 13) ^ 0);
+            }
 
-                pub fn getIsGroup(self: @This()) bool {
-                    return self.reader.readBoolField(224);
-                }
+            pub fn getIsGroup(self: @This()) bool {
+                return self.reader.readBoolField(224);
+            }
 
-                pub fn getDiscriminantCount(self: @This()) u16 {
-                    return self.reader.readIntField(u16, 15) ^ 0;
-                }
+            pub fn getDiscriminantCount(self: @This()) u16 {
+                return self.reader.readIntField(u16, 15) ^ 0;
+            }
 
-                pub fn getDiscriminantOffset(self: @This()) u32 {
-                    return self.reader.readIntField(u32, 8) ^ 0;
-                }
+            pub fn getDiscriminantOffset(self: @This()) u32 {
+                return self.reader.readIntField(u32, 8) ^ 0;
+            }
 
-                pub fn getFields(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Field) {
-                    return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Field), 3);
-                }
-            };
-        };
-
-        pub const Enum = struct {
-            const id: u64 = 0xb54ab3364333f598;
-
-            pub const _Group = struct {};
-
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
-                pub fn getEnumerants(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Enumerant) {
-                    return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Enumerant), 3);
-                }
-            };
-        };
-
-        pub const Interface = struct {
-            const id: u64 = 0xe82753cff0c2218f;
-
-            pub const _Group = struct {};
-
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
-                pub fn getMethods(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Method) {
-                    return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Method), 3);
-                }
-
-                pub fn getSuperclasses(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Superclass) {
-                    return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Superclass), 4);
-                }
-            };
-        };
-
-        pub const Const = struct {
-            const id: u64 = 0xb18aa5ac7a0d9420;
-
-            pub const _Group = struct {};
-
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
-                pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
-                }
-
-                pub fn getValue(self: @This()) capnp.Error!_Root.Value.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 4) };
-                }
-            };
-        };
-
-        pub const Annotation = struct {
-            const id: u64 = 0xec1619d4400a0290;
-
-            pub const _Group = struct {};
-
-            pub const Reader = struct {
-                reader: capnp.StructReader,
-
-                pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
-                    return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
-                }
-
-                pub fn getTargetsFile(self: @This()) bool {
-                    return self.reader.readBoolField(112);
-                }
-
-                pub fn getTargetsConst(self: @This()) bool {
-                    return self.reader.readBoolField(113);
-                }
-
-                pub fn getTargetsEnum(self: @This()) bool {
-                    return self.reader.readBoolField(114);
-                }
-
-                pub fn getTargetsEnumerant(self: @This()) bool {
-                    return self.reader.readBoolField(115);
-                }
-
-                pub fn getTargetsStruct(self: @This()) bool {
-                    return self.reader.readBoolField(116);
-                }
-
-                pub fn getTargetsField(self: @This()) bool {
-                    return self.reader.readBoolField(117);
-                }
-
-                pub fn getTargetsUnion(self: @This()) bool {
-                    return self.reader.readBoolField(118);
-                }
-
-                pub fn getTargetsGroup(self: @This()) bool {
-                    return self.reader.readBoolField(119);
-                }
-
-                pub fn getTargetsInterface(self: @This()) bool {
-                    return self.reader.readBoolField(120);
-                }
-
-                pub fn getTargetsMethod(self: @This()) bool {
-                    return self.reader.readBoolField(121);
-                }
-
-                pub fn getTargetsParam(self: @This()) bool {
-                    return self.reader.readBoolField(122);
-                }
-
-                pub fn getTargetsAnnotation(self: @This()) bool {
-                    return self.reader.readBoolField(123);
-                }
-            };
+            pub fn getFields(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Field) {
+                return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Field), 3);
+            }
         };
     };
 
-    pub const Parameter = struct {
+    pub const enum_ = struct {
+        const id: u64 = 0xb54ab3364333f598;
+
+        pub const _Group = struct {};
+
+        pub const Reader = struct {
+            reader: capnp.StructReader,
+
+            pub fn getEnumerants(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Enumerant) {
+                return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Enumerant), 3);
+            }
+        };
+    };
+
+    pub const interface = struct {
+        const id: u64 = 0xe82753cff0c2218f;
+
+        pub const _Group = struct {};
+
+        pub const Reader = struct {
+            reader: capnp.StructReader,
+
+            pub fn getMethods(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Method) {
+                return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Method), 3);
+            }
+
+            pub fn getSuperclasses(self: @This()) capnp.Error!capnp.CompositeListReader(_Root.Superclass) {
+                return try self.reader.readPtrField(capnp.CompositeListReader(_Root.Superclass), 4);
+            }
+        };
+    };
+
+    pub const const_ = struct {
+        const id: u64 = 0xb18aa5ac7a0d9420;
+
+        pub const _Group = struct {};
+
+        pub const Reader = struct {
+            reader: capnp.StructReader,
+
+            pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
+            }
+
+            pub fn getValue(self: @This()) capnp.Error!_Root.Value.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 4) };
+            }
+        };
+    };
+
+    pub const annotation = struct {
+        const id: u64 = 0xec1619d4400a0290;
+
+        pub const _Group = struct {};
+
+        pub const Reader = struct {
+            reader: capnp.StructReader,
+
+            pub fn getType(self: @This()) capnp.Error!_Root.Type.Reader {
+                return .{ .reader = try self.reader.readPtrField(capnp.StructReader, 3) };
+            }
+
+            pub fn getTargetsFile(self: @This()) bool {
+                return self.reader.readBoolField(112);
+            }
+
+            pub fn getTargetsConst(self: @This()) bool {
+                return self.reader.readBoolField(113);
+            }
+
+            pub fn getTargetsEnum(self: @This()) bool {
+                return self.reader.readBoolField(114);
+            }
+
+            pub fn getTargetsEnumerant(self: @This()) bool {
+                return self.reader.readBoolField(115);
+            }
+
+            pub fn getTargetsStruct(self: @This()) bool {
+                return self.reader.readBoolField(116);
+            }
+
+            pub fn getTargetsField(self: @This()) bool {
+                return self.reader.readBoolField(117);
+            }
+
+            pub fn getTargetsUnion(self: @This()) bool {
+                return self.reader.readBoolField(118);
+            }
+
+            pub fn getTargetsGroup(self: @This()) bool {
+                return self.reader.readBoolField(119);
+            }
+
+            pub fn getTargetsInterface(self: @This()) bool {
+                return self.reader.readBoolField(120);
+            }
+
+            pub fn getTargetsMethod(self: @This()) bool {
+                return self.reader.readBoolField(121);
+            }
+
+            pub fn getTargetsParam(self: @This()) bool {
+                return self.reader.readBoolField(122);
+            }
+
+            pub fn getTargetsAnnotation(self: @This()) bool {
+                return self.reader.readBoolField(123);
+            }
+        };
+    };
+
+    pub const parameter = struct {
         const id: u64 = 0xb9521bccf10fa3b1;
 
         pub const _Group = struct {};
@@ -225,30 +223,27 @@ pub const Node = struct {
         };
     };
 
+    pub const Tag = enum(u16) {
+        file,
+        struct_,
+        enum_,
+        interface,
+        const_,
+        annotation,
+        _,
+    };
+
     pub const Reader = struct {
         reader: capnp.StructReader,
 
-        pub const _Tag = union(enum) {
-            file: void,
-            struct_: _Root.Node._Group.Struct.Reader,
-            enum_: _Root.Node._Group.Enum.Reader,
-            interface: _Root.Node._Group.Interface.Reader,
-            const_: _Root.Node._Group.Const.Reader,
-            annotation: _Root.Node._Group.Annotation.Reader,
-            _: u16,
-        };
-
-        pub fn which(self: @This()) capnp.Error!_Tag {
-            return switch (self.reader.readIntField(u16, 6)) {
-                0 => _Tag{ .file = void{} },
-                1 => _Tag{ .struct_ = .{ .reader = self.reader } },
-                2 => _Tag{ .enum_ = .{ .reader = self.reader } },
-                3 => _Tag{ .interface = .{ .reader = self.reader } },
-                4 => _Tag{ .const_ = .{ .reader = self.reader } },
-                5 => _Tag{ .annotation = .{ .reader = self.reader } },
-                else => |n| _Tag{ ._ = n },
-            };
+        pub fn which(self: @This()) Tag {
+            return @enumFromInt(self.reader.readIntField(u16, 6));
         }
+
+        pub fn getStruct(self: @This()) ?struct_.Reader {
+            return .{ .reader = self.reader };
+        }
+
         pub fn getId(self: @This()) u64 {
             return self.reader.readIntField(u64, 0) ^ 0;
         }

@@ -90,6 +90,7 @@ const Capitalized = struct {
 
 pub fn Refactor(comptime W: type) type {
     return struct {
+        const WriterType = W;
         const E = W.Error || capnp.Error;
         const Self = @This();
 
@@ -124,7 +125,6 @@ pub fn Refactor(comptime W: type) type {
                 usingnamespace ZigType(T);
 
                 pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.writer.print("const \n", .{});
                     try ctx.writer.print(
                         "self.reader.readFloatField({s}, {d})",
                         .{
@@ -356,4 +356,36 @@ test "field" {
 
     try M.readerGetter(&ctx, reader);
     try std.testing.expectEqualStrings("self.reader.readIntField(i32, 3)", fbs.getWritten()[3..]);
+}
+
+test "node" {
+    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
+    const M = Refactor(@TypeOf(writer));
+
+    var file = try std.fs.cwd().openFile("capnp-tests/08-schema-examples.node.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    var nodeTable = NodeIdMap.init(std.testing.allocator);
+    defer nodeTable.deinit();
+
+    var pathTable = PathTable.init(nodeTable);
+    defer pathTable.deinit();
+
+    var ctx = M.WriteContext{
+        .writer = writer,
+        .indenter = M.Indenter{},
+        .pathTable = pathTable,
+    };
+    _ = ctx;
+
+    const reader = try message.getRootStruct(schema.Node);
+
+    const fields = try reader.getStruct().?.getFields();
+    _ = fields;
 }
