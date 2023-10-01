@@ -159,6 +159,7 @@ pub const ReadContext = struct {
     }
 
     pub fn readString(self: ReadContext, length: u32) []u8 {
+        if (length == 0) return "";
         return self.segments[self.segment][self.offsetBytes()..][0 .. length - 1];
     }
 
@@ -169,6 +170,12 @@ pub const ReadContext = struct {
             .offsetWords = 0,
             .traversal_counter = traversal_counter,
         };
+    }
+
+    pub fn format(value: ReadContext, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        _ = fmt;
+        try writer.print("{{segments = {}, segment = {}, offsetWords = {}}}", .{ value.segments.len, value.segment, value.offsetWords });
     }
 };
 
@@ -241,6 +248,12 @@ pub const StructReader = struct {
             .dataWords = struct_.dataWords,
             .ptrWords = struct_.ptrWords,
         };
+    }
+
+    pub fn format(value: StructReader, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        _ = fmt;
+        try writer.print("{{context = {}, dataWords = {}, ptrWords = {}}}", .{ value.context, value.dataWords, value.ptrWords });
     }
 };
 
