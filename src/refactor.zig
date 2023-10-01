@@ -214,8 +214,17 @@ pub fn Refactor(comptime W: type) type {
             usingnamespace ZigType([]const u8);
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.print("return \"\";", .{});
+                try ctx.openGetter(try field.getName());
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print(
+                        "return self.reader.readDataField({d});\n",
+                        .{
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
+                }
+                try ctx.closeGetter();
             }
         };
 
@@ -439,7 +448,7 @@ test "node" {
         .{ "i32", "pub fn getInt32(self: @This()) {\n    return self.reader.readIntField(i32, 0);\n}" },
         .{ "f32", "pub fn getFloat32(self: @This()) {\n    return self.reader.readFloatField(f32, 0);\n}" },
         .{ "[:0]const u8", "pub fn getText(self: @This()) {\n    return self.reader.readStringField(0);\n}" },
-        //.{ "[]const u8", "" },
+        .{ "[]const u8", "pub fn getData(self: @This()) {\n    return self.reader.readDataField(0);\n}" },
         //.{ "capnp.ListReader(i32)", "" },
     };
     inline for (0.., slotTypes) |i, slotType| {
