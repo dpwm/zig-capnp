@@ -124,6 +124,28 @@ pub fn Refactor(comptime W: type) type {
             };
         }
 
+        const Void = struct {
+            usingnamespace ZigType(void);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                try ctx.openGetter(try field.getName());
+                try ctx.writeIndent();
+                try ctx.writer.writeAll("return void{};\n");
+                try ctx.closeGetter();
+            }
+        };
+
+        const Bool = struct {
+            usingnamespace ZigType(bool);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                try ctx.openGetter(try field.getName());
+                try ctx.writeIndent();
+                try ctx.writer.print("return self.reader.readBoolField({d});\n", .{field.getSlot().?.getOffset()});
+                try ctx.closeGetter();
+            }
+        };
+
         fn Float(comptime T: type) type {
             return struct {
                 usingnamespace ZigType(T);
@@ -188,26 +210,6 @@ pub fn Refactor(comptime W: type) type {
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                 _ = field;
                 try ctx.writer.writeAll("return void{};");
-            }
-        };
-
-        const Void = struct {
-            usingnamespace ZigType(void);
-
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(try field.getName());
-                try ctx.writeIndent();
-                try ctx.writer.writeAll("return void{};\n");
-                try ctx.closeGetter();
-            }
-        };
-
-        const Bool = struct {
-            usingnamespace ZigType(bool);
-
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.print("return true;", .{});
             }
         };
 
@@ -410,7 +412,7 @@ test "node" {
     const fields = try reader.getStruct().?.getFields();
     const slotTypes = .{
         .{ "void", "pub fn getVoid(self: @This()) {\n    return void{};\n}" },
-        //.{ "bool", "return true;" },
+        .{ "bool", "pub fn getBool(self: @This()) {\n    return self.reader.readBoolField(0);\n}" },
         //.{ "i32", "return self.reader.readIntField(i32, 0)" },
         //.{ "f32", "" },
         //.{ "[:0]const u8", "" },
