@@ -88,6 +88,10 @@ const Capitalized = struct {
     }
 };
 
+fn capitalized(x: []const u8) Capitalized {
+    return .{ .str = x };
+}
+
 pub fn Refactor(comptime W: type) type {
     return struct {
         const WriterType = W;
@@ -99,7 +103,7 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn write(self: Indenter, writer: W) E!void {
                 for (0..self.level) |_| {
-                    try writer.writeAll("  ");
+                    try writer.writeAll("    ");
                 }
             }
 
@@ -191,8 +195,10 @@ pub fn Refactor(comptime W: type) type {
             usingnamespace ZigType(void);
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.writeAll("return void{};");
+                try ctx.openGetter(try field.getName());
+                try ctx.writeIndent();
+                try ctx.writer.writeAll("return void{};\n");
+                try ctx.closeGetter();
             }
         };
 
@@ -266,6 +272,22 @@ pub fn Refactor(comptime W: type) type {
             writer: W,
             indenter: Indenter,
             pathTable: PathTable,
+
+            pub fn writeIndent(self: *WriteContext) E!void {
+                try self.indenter.write(self.writer);
+            }
+
+            pub fn openGetter(ctx: *WriteContext, x: []const u8) E!void {
+                try ctx.writeIndent();
+                try ctx.writer.print("pub fn get{}(self: @This()) {{\n", .{capitalized(x)});
+                ctx.indenter.inc();
+            }
+
+            pub fn closeGetter(ctx: *WriteContext) E!void {
+                ctx.indenter.dec();
+                try ctx.writeIndent();
+                try ctx.writer.writeAll("}");
+            }
         };
 
         pub fn readerType(ctx: *WriteContext, reader: schema.Type.Reader) E!void {
@@ -360,7 +382,7 @@ test "field" {
 }
 
 test "node" {
-    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var buf = std.mem.zeroes([1024]u8);
     var fbs = std.io.fixedBufferStream(&buf);
     const writer = fbs.writer();
 
@@ -387,19 +409,22 @@ test "node" {
     const reader = try message.getRootStruct(schema.Node);
     const fields = try reader.getStruct().?.getFields();
     const slotTypes = .{
-        "void",
-        "bool",
-        "i32",
-        "f32",
-        "[:0]const u8",
-        "[]const u8",
-        "capnp.ListReader(i32)",
+        .{ "void", "pub fn getVoid(self: @This()) {\n    return void{};\n}" },
+        //.{ "bool", "return true;" },
+        //.{ "i32", "return self.reader.readIntField(i32, 0)" },
+        //.{ "f32", "" },
+        //.{ "[:0]const u8", "" },
+        //.{ "[]const u8", "" },
+        //.{ "capnp.ListReader(i32)", "" },
     };
     inline for (0.., slotTypes) |i, slotType| {
         const field = fields.get(i);
         fbs.reset();
         try M.readerType(&ctx, try field.getSlot().?.getType());
+        try std.testing.expectEqualStrings(slotType[0], fbs.getWritten());
 
-        try std.testing.expectEqualStrings(slotType, fbs.getWritten());
+        fbs.reset();
+        try M.readerGetter(&ctx, field);
+        try std.testing.expectEqualStrings(slotType[1], fbs.getWritten());
     }
 }
