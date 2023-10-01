@@ -129,8 +129,10 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                 try ctx.openGetter(try field.getName());
-                try ctx.writeIndent();
-                try ctx.writer.writeAll("return void{};\n");
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("return void{};\n");
+                }
                 try ctx.closeGetter();
             }
         };
@@ -140,40 +142,52 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                 try ctx.openGetter(try field.getName());
-                try ctx.writeIndent();
-                try ctx.writer.print("return self.reader.readBoolField({d});\n", .{field.getSlot().?.getOffset()});
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("return self.reader.readBoolField({d});\n", .{field.getSlot().?.getOffset()});
+                }
                 try ctx.closeGetter();
             }
         };
-
-        fn Float(comptime T: type) type {
-            return struct {
-                usingnamespace ZigType(T);
-
-                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.writer.print(
-                        "self.reader.readFloatField({s}, {d})",
-                        .{
-                            @typeName(T),
-                            field.getSlot().?.getOffset(),
-                        },
-                    );
-                }
-            };
-        }
 
         fn Int(comptime T: type) type {
             return struct {
                 usingnamespace ZigType(T);
 
                 pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.writer.print(
-                        "self.reader.readIntField({s}, {})",
-                        .{
-                            @typeName(T),
-                            field.getSlot().?.getOffset(),
-                        },
-                    );
+                    try ctx.openGetter(try field.getName());
+                    {
+                        try ctx.writeIndent();
+                        try ctx.writer.print(
+                            "return self.reader.readIntField({s}, {});\n",
+                            .{
+                                @typeName(T),
+                                field.getSlot().?.getOffset(),
+                            },
+                        );
+                    }
+                    try ctx.closeGetter();
+                }
+            };
+        }
+
+        fn Float(comptime T: type) type {
+            return struct {
+                usingnamespace ZigType(T);
+
+                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                    try ctx.openGetter(try field.getName());
+                    {
+                        try ctx.writeIndent();
+                        try ctx.writer.print(
+                            "self.reader.readFloatField({s}, {d})",
+                            .{
+                                @typeName(T),
+                                field.getSlot().?.getOffset(),
+                            },
+                        );
+                    }
+                    try ctx.closeGetter();
                 }
             };
         }
@@ -380,7 +394,7 @@ test "field" {
 
     fbs.reset();
     try M.readerGetter(&ctx, reader);
-    try std.testing.expectEqualStrings("self.reader.readIntField(i32, 3)", fbs.getWritten());
+    try std.testing.expectEqualStrings("pub fn get(self: @This()) {\n    return self.reader.readIntField(i32, 3);\n}", fbs.getWritten());
 }
 
 test "node" {
@@ -413,7 +427,7 @@ test "node" {
     const slotTypes = .{
         .{ "void", "pub fn getVoid(self: @This()) {\n    return void{};\n}" },
         .{ "bool", "pub fn getBool(self: @This()) {\n    return self.reader.readBoolField(0);\n}" },
-        //.{ "i32", "return self.reader.readIntField(i32, 0)" },
+        // .{ "i32", "pub fn getInt32(self: @This()) {\n    return self.reader.readIntField(i32, 0);\n}" },
         //.{ "f32", "" },
         //.{ "[:0]const u8", "" },
         //.{ "[]const u8", "" },
@@ -421,6 +435,8 @@ test "node" {
     };
     inline for (0.., slotTypes) |i, slotType| {
         const field = fields.get(i);
+        // debugging info
+        // std.debug.print("Reader: {}\n", .{field});
         fbs.reset();
         try M.readerType(&ctx, try field.getSlot().?.getType());
         try std.testing.expectEqualStrings(slotType[0], fbs.getWritten());
