@@ -180,7 +180,7 @@ pub fn Refactor(comptime W: type) type {
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print(
-                            "self.reader.readFloatField({s}, {d})",
+                            "return self.reader.readFloatField({s}, {d});\n",
                             .{
                                 @typeName(T),
                                 field.getSlot().?.getOffset(),
@@ -191,6 +191,33 @@ pub fn Refactor(comptime W: type) type {
                 }
             };
         }
+
+        const String = struct {
+            usingnamespace ZigType([:0]const u8);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                try ctx.openGetter(try field.getName());
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print(
+                        "return self.reader.readStringField({d});\n",
+                        .{
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
+                }
+                try ctx.closeGetter();
+            }
+        };
+
+        const Data = struct {
+            usingnamespace ZigType([]const u8);
+
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                try ctx.writer.print("return \"\";", .{});
+            }
+        };
 
         const List = struct {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
@@ -224,24 +251,6 @@ pub fn Refactor(comptime W: type) type {
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
                 _ = field;
                 try ctx.writer.writeAll("return void{};");
-            }
-        };
-
-        const String = struct {
-            usingnamespace ZigType([:0]const u8);
-
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.print("return \"\";", .{});
-            }
-        };
-
-        const Data = struct {
-            usingnamespace ZigType([]const u8);
-
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.print("return \"\";", .{});
             }
         };
 
@@ -427,9 +436,9 @@ test "node" {
     const slotTypes = .{
         .{ "void", "pub fn getVoid(self: @This()) {\n    return void{};\n}" },
         .{ "bool", "pub fn getBool(self: @This()) {\n    return self.reader.readBoolField(0);\n}" },
-        // .{ "i32", "pub fn getInt32(self: @This()) {\n    return self.reader.readIntField(i32, 0);\n}" },
-        //.{ "f32", "" },
-        //.{ "[:0]const u8", "" },
+        .{ "i32", "pub fn getInt32(self: @This()) {\n    return self.reader.readIntField(i32, 0);\n}" },
+        .{ "f32", "pub fn getFloat32(self: @This()) {\n    return self.reader.readFloatField(f32, 0);\n}" },
+        .{ "[:0]const u8", "pub fn getText(self: @This()) {\n    return self.reader.readStringField(0);\n}" },
         //.{ "[]const u8", "" },
         //.{ "capnp.ListReader(i32)", "" },
     };
