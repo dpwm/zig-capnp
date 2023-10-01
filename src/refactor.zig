@@ -354,8 +354,9 @@ test "field" {
 
     // try std.testing.expectEqualStrings("i32", fbs.getWritten());
 
+    fbs.reset();
     try M.readerGetter(&ctx, reader);
-    try std.testing.expectEqualStrings("self.reader.readIntField(i32, 3)", fbs.getWritten()[3..]);
+    try std.testing.expectEqualStrings("self.reader.readIntField(i32, 3)", fbs.getWritten());
 }
 
 test "node" {
@@ -382,10 +383,23 @@ test "node" {
         .indenter = M.Indenter{},
         .pathTable = pathTable,
     };
-    _ = ctx;
 
     const reader = try message.getRootStruct(schema.Node);
-
     const fields = try reader.getStruct().?.getFields();
-    _ = fields;
+    const slotTypes = .{
+        "void",
+        "bool",
+        "i32",
+        "f32",
+        "[:0]const u8",
+        "[]const u8",
+        "capnp.ListReader(i32)",
+    };
+    inline for (0.., slotTypes) |i, slotType| {
+        const field = fields.get(i);
+        fbs.reset();
+        try M.readerType(&ctx, try field.getSlot().?.getType());
+
+        try std.testing.expectEqualStrings(slotType, fbs.getWritten());
+    }
 }
