@@ -236,8 +236,20 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                try ctx.writer.writeAll("return void{};");
+                try ctx.openGetter(try field.getName());
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("return self.reader.readListField(");
+                    try Self.readerType(ctx, try (try field.getSlot().?.getType()).getList().?.getElementType());
+
+                    try ctx.writer.print(
+                        ", {d});\n",
+                        .{
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
+                }
+                try ctx.closeGetter();
             }
         };
 
@@ -449,7 +461,7 @@ test "node" {
         .{ "f32", "pub fn getFloat32(self: @This()) {\n    return self.reader.readFloatField(f32, 0);\n}" },
         .{ "[:0]const u8", "pub fn getText(self: @This()) {\n    return self.reader.readStringField(0);\n}" },
         .{ "[]const u8", "pub fn getData(self: @This()) {\n    return self.reader.readDataField(0);\n}" },
-        //.{ "capnp.ListReader(i32)", "" },
+        .{ "capnp.ListReader(i32)", "pub fn getInt32List(self: @This()) {\n    return self.reader.readListField(i32, 0);\n}" },
     };
     inline for (0.., slotTypes) |i, slotType| {
         const field = fields.get(i);
