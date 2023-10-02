@@ -88,8 +88,27 @@ const Capitalized = struct {
     }
 };
 
-fn capitalized(x: []const u8) Capitalized {
-    return .{ .str = x };
+fn Wrapper(comptime T: type, comptime F: anytype) type {
+    return struct {
+        value: T,
+
+        pub fn format(self: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+            try F(self.value, writer);
+        }
+    };
+}
+
+pub fn wrap(value: anytype, comptime F: anytype) Wrapper(@TypeOf(value), F) {
+    return .{ .value = value };
+}
+
+pub fn capitalize(str: []const u8, writer: anytype) !void {
+    if (str.len == 0) return;
+    try writer.print("{c}{s}", .{ std.ascii.toUpper(str[0]), str[1..] });
+}
+
+fn capitalized(x: []const u8) Wrapper([]const u8, capitalize) {
+    return wrap(x, capitalize);
 }
 
 pub fn Refactor(comptime W: type) type {
