@@ -95,6 +95,11 @@ fn capitalized(x: []const u8) Wrapper([]const u8, capitalize) {
     return wrap(x, capitalize);
 }
 
+const getter_type = enum {
+    reader,
+    builder,
+};
+
 pub fn Refactor(comptime W: type) type {
     return struct {
         const WriterType = W;
@@ -119,10 +124,16 @@ pub fn Refactor(comptime W: type) type {
             }
         };
 
-        const TypedContext = struct { ctx: *WriteContext, typ: schema.Type.Reader };
+        const TypedContext = struct {
+            ctx: *WriteContext,
+            typ: schema.Type.Reader,
+            gt: getter_type,
+        };
 
         fn typedFn(ctx: TypedContext, writer: anytype) @TypeOf(writer).Error!void {
-            return readerType(ctx.ctx, ctx.typ) catch |err| switch (err) {
+            const out = readerType(ctx.ctx, ctx.typ, ctx.gt);
+
+            return out catch |err| switch (err) {
                 error.LimitExceeded => {
                     return void{};
                 },
@@ -138,7 +149,7 @@ pub fn Refactor(comptime W: type) type {
 
         fn ZigType(comptime T: type) type {
             return struct {
-                pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader) E!void {
+                pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader, _: getter_type) E!void {
                     try ctx.writer.writeAll(@typeName(T));
                 }
             };
@@ -147,8 +158,8 @@ pub fn Refactor(comptime W: type) type {
         const Void = struct {
             usingnamespace ZigType(void);
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(field);
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
                     try ctx.writer.writeAll("return void{};\n");
@@ -160,8 +171,8 @@ pub fn Refactor(comptime W: type) type {
         const Bool = struct {
             usingnamespace ZigType(bool);
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(field);
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                try ctx.openGetter(field, gt);
 
                 {
                     try ctx.writeIndent();
@@ -175,8 +186,8 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace ZigType(T);
 
-                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.openGetter(field);
+                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                    try ctx.openGetter(field, gt);
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print(
@@ -196,8 +207,8 @@ pub fn Refactor(comptime W: type) type {
             return struct {
                 usingnamespace ZigType(T);
 
-                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.openGetter(field);
+                pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                    try ctx.openGetter(field, gt);
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print(
@@ -216,8 +227,8 @@ pub fn Refactor(comptime W: type) type {
         const String = struct {
             usingnamespace ZigType([:0]const u8);
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(field);
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print(
@@ -234,8 +245,8 @@ pub fn Refactor(comptime W: type) type {
         const Data = struct {
             usingnamespace ZigType([]const u8);
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(field);
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print(
@@ -250,21 +261,21 @@ pub fn Refactor(comptime W: type) type {
         };
 
         const List = struct {
-            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
                 try ctx.writer.writeAll("capnp.ListReader(");
-                try Self.readerType(ctx, try t.getList().?.getElementType());
+                try Self.readerType(ctx, try t.getList().?.getElementType(), gt);
                 try ctx.writer.writeAll(")");
             }
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openGetter(field);
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
 
                     try ctx.writer.print(
                         "return self.reader.readListField({}, {d});\n",
                         .{
-                            typed(.{ .typ = try (try field.getSlot().?.getType()).getList().?.getElementType(), .ctx = ctx }),
+                            typed(.{ .typ = try (try field.getSlot().?.getType()).getList().?.getElementType(), .ctx = ctx, .gt = gt }),
                             field.getSlot().?.getOffset(),
                         },
                     );
@@ -274,22 +285,26 @@ pub fn Refactor(comptime W: type) type {
         };
 
         const Struct = struct {
-            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
+                _ = gt;
                 try ctx.writer.writeAll(ctx.pathTable.get(t.getStruct().?.getTypeId()).?);
             }
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                _ = gt;
                 _ = field;
                 try ctx.writer.writeAll("return void{{}};");
             }
         };
 
         const Enum = struct {
-            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader) E!void {
+            pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
+                _ = gt;
                 try ctx.writer.writeAll(ctx.pathTable.get(t.getEnum().?.getTypeId()).?);
             }
 
-            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+            pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+                _ = gt;
                 _ = field;
                 try ctx.writer.writeAll("return void{};");
             }
@@ -343,11 +358,11 @@ pub fn Refactor(comptime W: type) type {
                 try self.indenter.write(self.writer);
             }
 
-            pub fn openGetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+            pub fn openGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
                 const name = try field.getName();
                 const typ = try field.getSlot().?.getType();
                 try ctx.writeIndent();
-                try ctx.writer.print("pub fn get{}(self: @This()) {} {{\n", .{ capitalized(name), typed(.{ .ctx = ctx, .typ = typ }) });
+                try ctx.writer.print("pub fn get{}(self: @This()) {} {{\n", .{ capitalized(name), typed(.{ .ctx = ctx, .typ = typ, .gt = gt }) });
                 ctx.indenter.inc();
             }
 
@@ -358,21 +373,21 @@ pub fn Refactor(comptime W: type) type {
             }
         };
 
-        pub fn readerType(ctx: *WriteContext, reader: schema.Type.Reader) E!void {
+        pub fn readerType(ctx: *WriteContext, reader: schema.Type.Reader, gt: getter_type) E!void {
             switch (reader.which()) {
                 inline else => |t| {
-                    try TypeRegistry.get(t).readerType(ctx, reader);
+                    try TypeRegistry.get(t).readerType(ctx, reader, gt);
                 },
             }
         }
 
-        pub fn readerGetter(ctx: *WriteContext, reader: schema.Field.Reader) E!void {
+        pub fn readerGetter(ctx: *WriteContext, reader: schema.Field.Reader, gt: getter_type) E!void {
             switch (reader.which()) {
                 .slot => {
                     const t = try reader.getSlot().?.getType();
                     switch (t.which()) {
                         inline else => |typeTag| {
-                            try TypeRegistry.get(typeTag).readerGetter(ctx, reader);
+                            try TypeRegistry.get(typeTag).readerGetter(ctx, reader, gt);
                         },
                     }
                 },
@@ -409,7 +424,7 @@ test "simple" {
     };
 
     const reader = try message.getRootStruct(schema.Type);
-    try M.readerType(&ctx, reader);
+    try M.readerType(&ctx, reader, .reader);
 
     try std.testing.expectEqualStrings("void", fbs.getWritten());
 }
@@ -440,12 +455,12 @@ test "field" {
     };
 
     const reader = try message.getRootStruct(schema.Field);
-    try M.readerType(&ctx, try reader.getSlot().?.getType());
+    try M.readerType(&ctx, try reader.getSlot().?.getType(), .reader);
 
     // try std.testing.expectEqualStrings("i32", fbs.getWritten());
 
     fbs.reset();
-    try M.readerGetter(&ctx, reader);
+    try M.readerGetter(&ctx, reader, .reader);
     try std.testing.expectEqualStrings("pub fn get(self: @This()) i32 {\n    return self.reader.readIntField(i32, 3);\n}", fbs.getWritten());
 }
 
@@ -476,7 +491,7 @@ test "node" {
 
     const reader = try message.getRootStruct(schema.Node);
     const fields = try reader.getStruct().?.getFields();
-    const slotTypes = .{
+    const readers = .{
         .{ "void", "pub fn getVoid(self: @This()) void {\n    return void{};\n}" },
         .{ "bool", "pub fn getBool(self: @This()) bool {\n    return self.reader.readBoolField(0);\n}" },
         .{ "i32", "pub fn getInt32(self: @This()) i32 {\n    return self.reader.readIntField(i32, 0);\n}" },
@@ -485,16 +500,16 @@ test "node" {
         .{ "[]const u8", "pub fn getData(self: @This()) []const u8 {\n    return self.reader.readDataField(0);\n}" },
         .{ "capnp.ListReader(i32)", "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}" },
     };
-    inline for (0.., slotTypes) |i, slotType| {
+    inline for (0.., readers) |i, slotType| {
         const field = fields.get(i);
         // debugging info
         // std.debug.print("Reader: {}\n", .{field});
         fbs.reset();
-        try M.readerType(&ctx, try field.getSlot().?.getType());
+        try M.readerType(&ctx, try field.getSlot().?.getType(), .reader);
         try std.testing.expectEqualStrings(slotType[0], fbs.getWritten());
 
         fbs.reset();
-        try M.readerGetter(&ctx, field);
+        try M.readerGetter(&ctx, field, .reader);
         try std.testing.expectEqualStrings(slotType[1], fbs.getWritten());
     }
 }
