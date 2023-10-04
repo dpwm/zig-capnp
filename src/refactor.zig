@@ -173,7 +173,6 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
                 try ctx.openGetter(field, gt);
-
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print("return self.reader.readBoolField({d});\n", .{field.getSlot().?.getOffset()});
@@ -287,13 +286,16 @@ pub fn Refactor(comptime W: type) type {
         const Struct = struct {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
                 _ = gt;
-                try ctx.writer.writeAll(ctx.pathTable.get(t.getStruct().?.getTypeId()).?);
+                try ctx.writer.print("capnp.Error!{s}.Reader", .{ctx.pathTable.get(t.getStruct().?.getTypeId()).?});
             }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
-                _ = gt;
-                _ = field;
-                try ctx.writer.writeAll("return void{{}};");
+                try ctx.openGetter(field, gt);
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("return self.reader.readStructField({s}, 0);\n", .{ctx.pathTable.get((try field.getSlot().?.getType()).getStruct().?.getTypeId()).?});
+                }
+                try ctx.closeGetter();
             }
         };
 
@@ -483,6 +485,8 @@ test "node" {
     var pathTable = PathTable.init(nodeTable);
     defer pathTable.deinit();
 
+    try pathTable.pathMap.put(0x0, try std.testing.allocator.dupe(u8, "_Root.TestStruct"));
+
     var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
@@ -499,7 +503,9 @@ test "node" {
         .{ "[:0]const u8", "pub fn getText(self: @This()) [:0]const u8 {\n    return self.reader.readStringField(0);\n}" },
         .{ "[]const u8", "pub fn getData(self: @This()) []const u8 {\n    return self.reader.readDataField(0);\n}" },
         .{ "capnp.ListReader(i32)", "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}" },
+        .{ "capnp.Error!_Root.TestStruct.Reader", "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}" },
     };
+
     inline for (0.., readers) |i, slotType| {
         const field = fields.get(i);
         // debugging info
