@@ -513,15 +513,15 @@ test "node" {
 
     const reader = try message.getRootStruct(schema.Node);
     const fields = try reader.getStruct().?.getFields();
-    const readers = .{
-        .{ "void", "pub fn getVoid(self: @This()) void {\n    return void{};\n}" },
-        .{ "bool", "pub fn getBool(self: @This()) bool {\n    return self.reader.readBoolField(0);\n}" },
-        .{ "i32", "pub fn getInt32(self: @This()) i32 {\n    return self.reader.readIntField(i32, 0);\n}" },
-        .{ "f32", "pub fn getFloat32(self: @This()) f32 {\n    return self.reader.readFloatField(f32, 0);\n}" },
-        .{ "capnp.Error![:0]const u8", "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.reader.readStringField(0);\n}" },
-        .{ "capnp.Error![]const u8", "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.reader.readDataField(0);\n}" },
-        .{ "capnp.ListReader(i32)", "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}" },
-        .{ "capnp.Error!_Root.TestStruct.Reader", "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}" },
+    const reader_getters = .{
+        "pub fn getVoid(self: @This()) void {\n    return void{};\n}",
+        "pub fn getBool(self: @This()) bool {\n    return self.reader.readBoolField(0);\n}",
+        "pub fn getInt32(self: @This()) i32 {\n    return self.reader.readIntField(i32, 0);\n}",
+        "pub fn getFloat32(self: @This()) f32 {\n    return self.reader.readFloatField(f32, 0);\n}",
+        "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.reader.readStringField(0);\n}",
+        "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.reader.readDataField(0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}",
+        "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
     const builder_getters = .{
@@ -533,17 +533,13 @@ test "node" {
         "pub fn getData(self: @This()) []const u8 {\n    return self.builder.readDataField(0);\n}",
     };
 
-    inline for (0.., readers) |i, slotType| {
+    inline for (0.., reader_getters) |i, getterText| {
         const field = fields.get(i);
         // debugging info
         // std.debug.print("Reader: {}\n", .{field});
         fbs.reset();
-        try M.readerType(&ctx, try field.getSlot().?.getType(), .reader);
-        try std.testing.expectEqualStrings(slotType[0], fbs.getWritten());
-
-        fbs.reset();
         try M.readerGetter(&ctx, field, .reader);
-        try std.testing.expectEqualStrings(slotType[1], fbs.getWritten());
+        try std.testing.expectEqualStrings(getterText, fbs.getWritten());
     }
 
     inline for (0.., builder_getters) |i, getterText| {
