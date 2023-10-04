@@ -279,7 +279,14 @@ pub fn Refactor(comptime W: type) type {
 
         const List = struct {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
-                try ctx.writer.writeAll("capnp.ListReader(");
+                switch (gt) {
+                    .reader => {
+                        try ctx.writer.writeAll("capnp.ListReader(");
+                    },
+                    .builder => {
+                        try ctx.writer.writeAll("capnp.ListBuilder(");
+                    },
+                }
                 try Self.readerType(ctx, try t.getList().?.getElementType(), gt);
                 try ctx.writer.writeAll(")");
             }
@@ -290,8 +297,9 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.writeIndent();
 
                     try ctx.writer.print(
-                        "return self.reader.readListField({}, {d});\n",
+                        "return self.{s}.readListField({}, {d});\n",
                         .{
+                            gt.toString(),
                             typed(.{ .typ = try (try field.getSlot().?.getType()).getList().?.getElementType(), .ctx = ctx, .gt = gt }),
                             field.getSlot().?.getOffset(),
                         },
@@ -303,8 +311,14 @@ pub fn Refactor(comptime W: type) type {
 
         const Struct = struct {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
-                _ = gt;
-                try ctx.writer.print("capnp.Error!{s}.Reader", .{ctx.pathTable.get(t.getStruct().?.getTypeId()).?});
+                switch (gt) {
+                    .reader => {
+                        try ctx.writer.print("capnp.Error!{s}.Reader", .{ctx.pathTable.get(t.getStruct().?.getTypeId()).?});
+                    },
+                    .builder => {
+                        try ctx.writer.print("capnp.Error!{s}.Builder", .{ctx.pathTable.get(t.getStruct().?.getTypeId()).?});
+                    },
+                }
             }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
@@ -531,6 +545,8 @@ test "node" {
         "pub fn getFloat32(self: @This()) f32 {\n    return self.builder.readFloatField(f32, 0);\n}",
         "pub fn getText(self: @This()) [:0]const u8 {\n    return self.builder.readStringField(0);\n}",
         "pub fn getData(self: @This()) []const u8 {\n    return self.builder.readDataField(0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.ListBuilder(i32) {\n    return self.builder.readListField(i32, 0);\n}",
+        "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Builder {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
     inline for (0.., reader_getters) |i, getterText| {
