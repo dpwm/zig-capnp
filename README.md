@@ -9,7 +9,7 @@ The current status is that code generation is working for schema.capnp to the po
 
 - [x] Minimal reading
 - [x] Reading of capnproto
-- [x] Code generation (Reader)
+- [ ] Code generation (Reader)
 - [ ] Code generation (Builder)
 - [ ] Packed messages
 - [ ] RPC
