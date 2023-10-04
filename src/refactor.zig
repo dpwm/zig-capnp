@@ -230,7 +230,12 @@ pub fn Refactor(comptime W: type) type {
         }
 
         const String = struct {
-            usingnamespace ZigType([:0]const u8);
+            pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader, gt: getter_type) E!void {
+                switch (gt) {
+                    .reader => try ctx.writer.writeAll("capnp.Error![:0]const u8"),
+                    .builder => try ctx.writer.writeAll("[:0]const u8"),
+                }
+            }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
                 try ctx.openGetter(field, gt);
@@ -249,7 +254,12 @@ pub fn Refactor(comptime W: type) type {
         };
 
         const Data = struct {
-            usingnamespace ZigType([]const u8);
+            pub fn readerType(ctx: *WriteContext, _: schema.Type.Reader, gt: getter_type) E!void {
+                switch (gt) {
+                    .reader => try ctx.writer.writeAll("capnp.Error![]const u8"),
+                    .builder => try ctx.writer.writeAll("[]const u8"),
+                }
+            }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
                 try ctx.openGetter(field, gt);
@@ -508,8 +518,8 @@ test "node" {
         .{ "bool", "pub fn getBool(self: @This()) bool {\n    return self.reader.readBoolField(0);\n}" },
         .{ "i32", "pub fn getInt32(self: @This()) i32 {\n    return self.reader.readIntField(i32, 0);\n}" },
         .{ "f32", "pub fn getFloat32(self: @This()) f32 {\n    return self.reader.readFloatField(f32, 0);\n}" },
-        .{ "[:0]const u8", "pub fn getText(self: @This()) [:0]const u8 {\n    return self.reader.readStringField(0);\n}" },
-        .{ "[]const u8", "pub fn getData(self: @This()) []const u8 {\n    return self.reader.readDataField(0);\n}" },
+        .{ "capnp.Error![:0]const u8", "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.reader.readStringField(0);\n}" },
+        .{ "capnp.Error![]const u8", "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.reader.readDataField(0);\n}" },
         .{ "capnp.ListReader(i32)", "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}" },
         .{ "capnp.Error!_Root.TestStruct.Reader", "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}" },
     };
