@@ -98,6 +98,10 @@ fn capitalized(x: []const u8) Wrapper([]const u8, capitalize) {
 const getter_type = enum {
     reader,
     builder,
+
+    pub fn toString(self: getter_type) []const u8 {
+        return @tagName(self);
+    }
 };
 
 pub fn Refactor(comptime W: type) type {
@@ -175,7 +179,7 @@ pub fn Refactor(comptime W: type) type {
                 try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
-                    try ctx.writer.print("return self.reader.readBoolField({d});\n", .{field.getSlot().?.getOffset()});
+                    try ctx.writer.print("return self.{s}.readBoolField({d});\n", .{ gt.toString(), field.getSlot().?.getOffset() });
                 }
                 try ctx.closeGetter();
             }
@@ -190,8 +194,9 @@ pub fn Refactor(comptime W: type) type {
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print(
-                            "return self.reader.readIntField({s}, {});\n",
+                            "return self.{s}.readIntField({s}, {});\n",
                             .{
+                                gt.toString(),
                                 @typeName(T),
                                 field.getSlot().?.getOffset(),
                             },
@@ -211,8 +216,9 @@ pub fn Refactor(comptime W: type) type {
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print(
-                            "return self.reader.readFloatField({s}, {d});\n",
+                            "return self.{s}.readFloatField({s}, {d});\n",
                             .{
+                                gt.toString(),
                                 @typeName(T),
                                 field.getSlot().?.getOffset(),
                             },
@@ -231,8 +237,9 @@ pub fn Refactor(comptime W: type) type {
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print(
-                        "return self.reader.readStringField({d});\n",
+                        "return self.{s}.readStringField({d});\n",
                         .{
+                            gt.toString(),
                             field.getSlot().?.getOffset(),
                         },
                     );
@@ -249,8 +256,9 @@ pub fn Refactor(comptime W: type) type {
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print(
-                        "return self.reader.readDataField({d});\n",
+                        "return self.{s}.readDataField({d});\n",
                         .{
+                            gt.toString(),
                             field.getSlot().?.getOffset(),
                         },
                     );
@@ -506,6 +514,15 @@ test "node" {
         .{ "capnp.Error!_Root.TestStruct.Reader", "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}" },
     };
 
+    const builder_getters = .{
+        "pub fn getVoid(self: @This()) void {\n    return void{};\n}",
+        "pub fn getBool(self: @This()) bool {\n    return self.builder.readBoolField(0);\n}",
+        "pub fn getInt32(self: @This()) i32 {\n    return self.builder.readIntField(i32, 0);\n}",
+        "pub fn getFloat32(self: @This()) f32 {\n    return self.builder.readFloatField(f32, 0);\n}",
+        "pub fn getText(self: @This()) [:0]const u8 {\n    return self.builder.readStringField(0);\n}",
+        "pub fn getData(self: @This()) []const u8 {\n    return self.builder.readDataField(0);\n}",
+    };
+
     inline for (0.., readers) |i, slotType| {
         const field = fields.get(i);
         // debugging info
@@ -517,5 +534,12 @@ test "node" {
         fbs.reset();
         try M.readerGetter(&ctx, field, .reader);
         try std.testing.expectEqualStrings(slotType[1], fbs.getWritten());
+    }
+
+    inline for (0.., builder_getters) |i, getterText| {
+        const field = fields.get(i);
+        fbs.reset();
+        try M.readerGetter(&ctx, field, .builder);
+        try std.testing.expectEqualStrings(getterText, fbs.getWritten());
     }
 }
