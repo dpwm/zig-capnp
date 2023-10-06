@@ -170,6 +170,11 @@ pub fn Refactor(comptime W: type) type {
                 }
                 try ctx.closeGetter();
             }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
+            }
         };
 
         const Bool = struct {
@@ -182,6 +187,11 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.writer.print("return self.{s}.readBoolField({d});\n", .{ gt.toString(), field.getSlot().?.getOffset() });
                 }
                 try ctx.closeGetter();
+            }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
             }
         };
 
@@ -204,6 +214,11 @@ pub fn Refactor(comptime W: type) type {
                     }
                     try ctx.closeGetter();
                 }
+
+                pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                    _ = field;
+                    _ = ctx;
+                }
             };
         }
 
@@ -225,6 +240,11 @@ pub fn Refactor(comptime W: type) type {
                         );
                     }
                     try ctx.closeGetter();
+                }
+
+                pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                    _ = field;
+                    _ = ctx;
                 }
             };
         }
@@ -251,6 +271,11 @@ pub fn Refactor(comptime W: type) type {
                 }
                 try ctx.closeGetter();
             }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
+            }
         };
 
         const Data = struct {
@@ -274,6 +299,11 @@ pub fn Refactor(comptime W: type) type {
                     );
                 }
                 try ctx.closeGetter();
+            }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
             }
         };
 
@@ -307,6 +337,11 @@ pub fn Refactor(comptime W: type) type {
                 }
                 try ctx.closeGetter();
             }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
+            }
         };
 
         const Struct = struct {
@@ -329,6 +364,11 @@ pub fn Refactor(comptime W: type) type {
                 }
                 try ctx.closeGetter();
             }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
+            }
         };
 
         const Enum = struct {
@@ -341,6 +381,11 @@ pub fn Refactor(comptime W: type) type {
                 _ = gt;
                 _ = field;
                 try ctx.writer.writeAll("return void{};");
+            }
+
+            pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+                _ = field;
+                _ = ctx;
             }
         };
 
@@ -422,6 +467,21 @@ pub fn Refactor(comptime W: type) type {
                     switch (t.which()) {
                         inline else => |typeTag| {
                             try TypeRegistry.get(typeTag).readerGetter(ctx, reader, gt);
+                        },
+                    }
+                },
+                .group => {},
+                else => {},
+            }
+        }
+
+        pub fn builderSetter(ctx: *WriteContext, reader: schema.Field.Reader) E!void {
+            switch (reader.which()) {
+                .slot => {
+                    const t = try reader.getSlot().?.getType();
+                    switch (t.which()) {
+                        inline else => |typeTag| {
+                            try TypeRegistry.get(typeTag).builderSetter(ctx, reader);
                         },
                     }
                 },
@@ -538,6 +598,15 @@ test "node" {
         "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
+    inline for (0.., reader_getters) |i, getterText| {
+        const field = fields.get(i);
+        // debugging info
+        // std.debug.print("Reader: {}\n", .{field});
+        fbs.reset();
+        try M.readerGetter(&ctx, field, .reader);
+        try std.testing.expectEqualStrings(getterText, fbs.getWritten());
+    }
+
     const builder_getters = .{
         "pub fn getVoid(self: @This()) void {\n    return void{};\n}",
         "pub fn getBool(self: @This()) bool {\n    return self.builder.readBoolField(0);\n}",
@@ -549,19 +618,20 @@ test "node" {
         "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Builder {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
-    inline for (0.., reader_getters) |i, getterText| {
-        const field = fields.get(i);
-        // debugging info
-        // std.debug.print("Reader: {}\n", .{field});
-        fbs.reset();
-        try M.readerGetter(&ctx, field, .reader);
-        try std.testing.expectEqualStrings(getterText, fbs.getWritten());
-    }
-
     inline for (0.., builder_getters) |i, getterText| {
         const field = fields.get(i);
         fbs.reset();
         try M.readerGetter(&ctx, field, .builder);
         try std.testing.expectEqualStrings(getterText, fbs.getWritten());
+    }
+
+    const builder_setters = .{
+        "pub fn setVoid(self: @This, value: void) void {\n    return;\n}",
+    };
+    inline for (0.., builder_setters) |i, setterText| {
+        const field = fields.get(i);
+        fbs.reset();
+        try M.builderSetter(&ctx, field);
+        try std.testing.expectEqualStrings(setterText, fbs.getWritten());
     }
 }
