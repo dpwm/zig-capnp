@@ -176,7 +176,7 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openSetter(try field.getName(), "void");
+                try ctx.openSetter(try field.getName(), "void", "void");
                 {
                     try ctx.writeIndent();
                     try ctx.writer.writeAll("return;\n");
@@ -199,7 +199,7 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                try ctx.openSetter(try field.getName(), "bool");
+                try ctx.openSetter(try field.getName(), "bool", "void");
                 {
                     try ctx.writeIndent();
                     try ctx.writer.print("self.builder.setBoolField({d}, value);\n", .{field.getSlot().?.getOffset()});
@@ -230,7 +230,7 @@ pub fn Refactor(comptime W: type) type {
                 }
 
                 pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.openSetter(try field.getName(), @typeName(T));
+                    try ctx.openSetter(try field.getName(), @typeName(T), "void");
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print("self.builder.setIntField({s}, {d}, value);\n", .{ @typeName(T), field.getSlot().?.getOffset() });
@@ -262,7 +262,7 @@ pub fn Refactor(comptime W: type) type {
                 }
 
                 pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                    try ctx.openSetter(try field.getName(), @typeName(T));
+                    try ctx.openSetter(try field.getName(), @typeName(T), "void");
                     {
                         try ctx.writeIndent();
                         try ctx.writer.print("self.builder.setFloatField({s}, {d}, value);\n", .{ @typeName(T), field.getSlot().?.getOffset() });
@@ -297,8 +297,13 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                _ = ctx;
+                try ctx.openSetter(try field.getName(), "[:0]const u8", "capnp.Error!void");
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("try self.builder.setTextField({d}, value);\n", .{field.getSlot().?.getOffset()});
+                }
+
+                try ctx.closeSetter();
             }
         };
 
@@ -326,8 +331,13 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                _ = ctx;
+                try ctx.openSetter(try field.getName(), "[]const u8", "capnp.Error!void");
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("try self.builder.setDataField({d}, value);\n", .{field.getSlot().?.getOffset()});
+                }
+
+                try ctx.closeSetter();
             }
         };
 
@@ -474,9 +484,9 @@ pub fn Refactor(comptime W: type) type {
                 ctx.indenter.inc();
             }
 
-            pub fn openSetter(ctx: *WriteContext, name: []const u8, typ: []const u8) E!void {
+            pub fn openSetter(ctx: *WriteContext, name: []const u8, typ: []const u8, rtyp: []const u8) E!void {
                 try ctx.writeIndent();
-                try ctx.writer.print("pub fn set{s}(self: @This(), value: {s}) void {{\n", .{ capitalized(name), typ });
+                try ctx.writer.print("pub fn set{s}(self: @This(), value: {s}) {s} {{\n", .{ capitalized(name), typ, rtyp });
                 ctx.indenter.inc();
             }
 
@@ -667,6 +677,10 @@ test "node" {
         "pub fn setBool(self: @This(), value: bool) void {\n    self.builder.setBoolField(0, value);\n}",
         "pub fn setInt32(self: @This(), value: i32) void {\n    self.builder.setIntField(i32, 0, value);\n}",
         "pub fn setFloat32(self: @This(), value: f32) void {\n    self.builder.setFloatField(f32, 0, value);\n}",
+        "pub fn setText(self: @This(), value: [:0]const u8) capnp.Error!void {\n    try self.builder.setTextField(0, value);\n}",
+        "pub fn setData(self: @This(), value: []const u8) capnp.Error!void {\n    try self.builder.setDataField(0, value);\n}",
+        // "pub fn setInt32List(self: @This(), value: capnp.ListReader(i32)) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
+        // "pub fn setStruct(self: @This(), value: TestStruct.Reader) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
     };
 
     inline for (0.., builder_setters) |i, setterText| {
