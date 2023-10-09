@@ -95,6 +95,16 @@ fn capitalized(x: []const u8) Wrapper([]const u8, capitalize) {
     return wrap(x, capitalize);
 }
 
+fn concatFn(values: [2][]const u8, writer: anytype) !void {
+    for (values) |value| {
+        try writer.print("{s}", .{value});
+    }
+}
+
+fn concat(value: [2][]const u8) Wrapper([2][]const u8, concatFn) {
+    return .{ .value = value };
+}
+
 const getter_type = enum {
     reader,
     builder,
@@ -400,8 +410,13 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                _ = ctx;
+                const path = ctx.pathTable.get((try field.getSlot().?.getType()).getStruct().?.getTypeId()).?;
+                try ctx.openSetter(try field.getName(), concat([_][]const u8{ path, ".Reader" }), "capnp.Error!void");
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("return self.builder.setStructField({s}, 0, value);\n", .{path});
+                }
+                try ctx.closeGetter();
             }
 
             pub fn builderType(ctx: *WriteContext, field: schema.Field.Reader) E!void {
@@ -484,7 +499,7 @@ pub fn Refactor(comptime W: type) type {
                 ctx.indenter.inc();
             }
 
-            pub fn openSetter(ctx: *WriteContext, name: []const u8, typ: []const u8, rtyp: []const u8) E!void {
+            pub fn openSetter(ctx: *WriteContext, name: []const u8, typ: anytype, rtyp: anytype) E!void {
                 try ctx.writeIndent();
                 try ctx.writer.print("pub fn set{s}(self: @This(), value: {s}) {s} {{\n", .{ capitalized(name), typ, rtyp });
                 ctx.indenter.inc();
@@ -680,7 +695,8 @@ test "node" {
         "pub fn setText(self: @This(), value: [:0]const u8) capnp.Error!void {\n    try self.builder.setTextField(0, value);\n}",
         "pub fn setData(self: @This(), value: []const u8) capnp.Error!void {\n    try self.builder.setDataField(0, value);\n}",
         // "pub fn setInt32List(self: @This(), value: capnp.ListReader(i32)) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
-        // "pub fn setStruct(self: @This(), value: TestStruct.Reader) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
+        "",
+        "pub fn setStruct(self: @This(), value: _Root.TestStruct.Reader) capnp.Error!void {\n    return self.builder.setStructField(_Root.TestStruct, 0, value);\n}",
     };
 
     inline for (0.., builder_setters) |i, setterText| {
