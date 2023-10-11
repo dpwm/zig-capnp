@@ -404,7 +404,13 @@ pub fn Refactor(comptime W: type) type {
                 try ctx.openGetter(field, gt);
                 {
                     try ctx.writeIndent();
-                    try ctx.writer.print("return self.reader.readStructField({s}, 0);\n", .{ctx.pathTable.get((try field.getSlot().?.getType()).getStruct().?.getTypeId()).?});
+                    try ctx.writer.print(
+                        "return self.reader.readStructField({s}, {d});\n",
+                        .{
+                            ctx.pathTable.get((try field.getSlot().?.getType()).getStruct().?.getTypeId()).?,
+                            field.getSlot().?.getOffset(),
+                        },
+                    );
                 }
                 try ctx.closeGetter();
             }
@@ -414,7 +420,7 @@ pub fn Refactor(comptime W: type) type {
                 try ctx.openSetter(try field.getName(), concat([_][]const u8{ path, ".Reader" }), "capnp.Error!void");
                 {
                     try ctx.writeIndent();
-                    try ctx.writer.print("return self.builder.setStructField({s}, 0, value);\n", .{path});
+                    try ctx.writer.print("return self.builder.setStructField({s}, {d}, value);\n", .{ path, field.getSlot().?.getOffset() });
                 }
                 try ctx.closeGetter();
             }
