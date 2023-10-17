@@ -355,14 +355,16 @@ pub fn Refactor(comptime W: type) type {
             pub fn readerType(ctx: *WriteContext, t: schema.Type.Reader, gt: getter_type) E!void {
                 switch (gt) {
                     .reader => {
-                        try ctx.writer.writeAll("capnp.ListReader(");
+                        try ctx.writer.writeAll("capnp.List(");
+                        try Self.readerType(ctx, try t.getList().?.getElementType(), gt);
+                        try ctx.writer.writeAll(").Reader");
                     },
                     .builder => {
-                        try ctx.writer.writeAll("capnp.ListBuilder(");
+                        try ctx.writer.writeAll("capnp.List(");
+                        try Self.readerType(ctx, try t.getList().?.getElementType(), gt);
+                        try ctx.writer.writeAll(").Builder");
                     },
                 }
-                try Self.readerType(ctx, try t.getList().?.getElementType(), gt);
-                try ctx.writer.writeAll(")");
             }
 
             pub fn readerGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
@@ -383,8 +385,13 @@ pub fn Refactor(comptime W: type) type {
             }
 
             pub fn builderSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
-                _ = field;
-                _ = ctx;
+                try ctx.openSetter(try field.getName(), "", "capnp.Error!void");
+                {
+                    try ctx.writeIndent();
+                    try ctx.writer.print("try self.builder.setDataField({d}, value);\n", .{field.getSlot().?.getOffset()});
+                }
+
+                try ctx.closeSetter();
             }
         };
 
@@ -557,6 +564,31 @@ pub fn Refactor(comptime W: type) type {
                 else => {},
             }
         }
+
+        fn zigNameHelper(name: []const u8, n: usize) []const u8 {
+            var buf: [8]u8 = std.mem.zeroes([8]u8);
+            var fbs = std.io.fixedBufferStream(&buf);
+            const writer = fbs.writer();
+
+            writer.print("{c}{s}", .{ name[0], name[n..] }) catch return "";
+            return fbs.getWritten();
+        }
+
+        pub fn writeGetterReturnType(ctx: *WriteContext, reader: schema.Type.Reader, gt: getter_type) E!void {
+            _ = gt;
+            const out = switch (reader.which()) {
+                .void => "void",
+                .bool => "bool",
+                .int8, .int16, .int32, .int64 => |x| zigNameHelper(@tagName(x), 3),
+                .uint8, .uint16, .uint32, .uint64 => |x| zigNameHelper(@tagName(x), 4),
+                .float32, .float64 => |x| zigNameHelper(@tagName(x), 5),
+                .text => "[:0]const u8",
+                .data => "[]const u8",
+                .list => "LIST",
+                else => "ELSE",
+            };
+            try ctx.writer.writeAll(out);
+        }
     };
 }
 
@@ -586,9 +618,47 @@ test "simple" {
     };
 
     const reader = try message.getRootStruct(schema.Type);
+
     try M.readerType(&ctx, reader, .reader);
 
     try std.testing.expectEqualStrings("void", fbs.getWritten());
+}
+
+test "writeReaderGetterReturnType" {
+    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
+    const M = Refactor(@TypeOf(writer));
+
+    var file = try std.fs.cwd().openFile("capnp-tests/08-schema-examples.node.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    var nodeTable = NodeIdMap.init(std.testing.allocator);
+    defer nodeTable.deinit();
+
+    var pathTable = PathTable.init(nodeTable);
+    defer pathTable.deinit();
+
+    var ctx = M.WriteContext{
+        .writer = writer,
+        .indenter = M.Indenter{},
+        .pathTable = pathTable,
+    };
+
+    const reader = try message.getRootStruct(schema.Node);
+    const fields = try reader.getStruct().?.getFields();
+
+    fbs.reset();
+    try M.writeGetterReturnType(&ctx, try fields.get(0).getSlot().?.getType(), .reader);
+    try std.testing.expectEqualStrings("void", fbs.getWritten());
+
+    fbs.reset();
+    try M.writeGetterReturnType(&ctx, try fields.get(1).getSlot().?.getType(), .reader);
+    try std.testing.expectEqualStrings("bool", fbs.getWritten());
 }
 
 test "field" {
@@ -662,7 +732,7 @@ test "node" {
         "pub fn getFloat32(self: @This()) f32 {\n    return self.reader.readFloatField(f32, 0);\n}",
         "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.reader.readStringField(0);\n}",
         "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.reader.readDataField(0);\n}",
-        "pub fn getInt32List(self: @This()) capnp.ListReader(i32) {\n    return self.reader.readListField(i32, 0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.List(i32).Reader {\n    return self.reader.readListField(i32, 0);\n}",
         "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
@@ -682,7 +752,7 @@ test "node" {
         "pub fn getFloat32(self: @This()) f32 {\n    return self.builder.readFloatField(f32, 0);\n}",
         "pub fn getText(self: @This()) [:0]const u8 {\n    return self.builder.readStringField(0);\n}",
         "pub fn getData(self: @This()) []const u8 {\n    return self.builder.readDataField(0);\n}",
-        "pub fn getInt32List(self: @This()) capnp.ListBuilder(i32) {\n    return self.builder.readListField(i32, 0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.List(i32).Builder {\n    return self.builder.readListField(i32, 0);\n}",
         "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Builder {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
@@ -700,9 +770,8 @@ test "node" {
         "pub fn setFloat32(self: @This(), value: f32) void {\n    self.builder.setFloatField(f32, 0, value);\n}",
         "pub fn setText(self: @This(), value: [:0]const u8) capnp.Error!void {\n    try self.builder.setTextField(0, value);\n}",
         "pub fn setData(self: @This(), value: []const u8) capnp.Error!void {\n    try self.builder.setDataField(0, value);\n}",
-        // "pub fn setInt32List(self: @This(), value: capnp.ListReader(i32)) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
-        "",
-        "pub fn setStruct(self: @This(), value: _Root.TestStruct.Reader) capnp.Error!void {\n    return self.builder.setStructField(_Root.TestStruct, 0, value);\n}",
+        //        "pub fn setInt32List(self: @This(), value: ) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
+        //        "pub fn setStruct(self: @This(), value: _Root.TestStruct.Reader) capnp.Error!void {\n    return self.builder.setStructField(_Root.TestStruct, 0, value);\n}",
     };
 
     inline for (0.., builder_setters) |i, setterText| {
