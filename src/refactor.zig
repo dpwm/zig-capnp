@@ -361,6 +361,51 @@ pub fn Refactor(comptime W: type) type {
                 else => {},
             }
         }
+
+        pub fn writeSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
+            switch (field.which()) {
+                .slot => {
+                    const slot = field.getSlot().?;
+                    const t = try slot.getType();
+
+                    switch (t.which()) {
+                        .void => {
+                            try ctx.openSetter(try field.getName(), "void", "void");
+                            try ctx.writeIndent();
+                            try ctx.writer.writeAll("return;\n");
+                            try ctx.closeSetter();
+                        },
+                        .bool => {
+                            try ctx.openSetter(try field.getName(), "bool", "void");
+                            try ctx.writeIndent();
+                            try ctx.writer.print("self.builder.setBoolField({d}, value);\n", .{slot.getOffset()});
+                            try ctx.closeSetter();
+                        },
+                        inline .int8, .int16, .int32, .int64, .uint8, .uint16, .uint32, .uint64 => |typeTag| {
+                            const typeTagName = @tagName(typeTag);
+                            const zigTypeName = zigNameHelper(typeTagName, if (typeTagName[0] == 'u') 4 else 3);
+                            try ctx.openSetter(try field.getName(), zigTypeName, "void");
+                            try ctx.writeIndent();
+
+                            try ctx.writer.print(
+                                "self.builder.setIntField({s}, {d}, value);\n",
+                                .{
+                                    zigTypeName,
+                                    slot.getOffset(),
+                                },
+                            );
+                            try ctx.closeSetter();
+                        },
+
+                        else => {},
+                    }
+                },
+                .group => {
+                    try ctx.writer.writeAll(ctx.pathTable.get(field.getGroup().?.getTypeId()).?);
+                },
+                else => {},
+            }
+        }
     };
 }
 
@@ -545,12 +590,11 @@ test "node" {
         "pub fn setInt32List(self: @This(), value: ) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
         "pub fn setStruct(self: @This(), value: _Root.TestStruct.Reader) capnp.Error!void {\n    return self.builder.setStructField(_Root.TestStruct, 0, value);\n}",
     };
-    _ = builder_setters;
-}
 
-//    inline for (0.., builder_setters) |i, setterText| {
-//        const field = fields.get(i);
-//        fbs.reset();
-//        try M.builderSetter(&ctx, field);
-//        try std.testing.expectEqualStrings(setterText, fbs.getWritten());
-//    }
+    inline for (0.., builder_setters) |i, setterText| {
+        const field = fields.get(i);
+        fbs.reset();
+        try M.writeSetter(&ctx, field);
+        try std.testing.expectEqualStrings(setterText, fbs.getWritten());
+    }
+}
