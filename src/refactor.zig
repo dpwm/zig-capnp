@@ -195,7 +195,7 @@ pub fn Refactor(comptime W: type) type {
                         .reader => .reader_getter,
                         .builder => .builder_getter,
                     },
-                    .with_error = gt == .reader,
+                    .with_error = gt == .reader or typ.which() == .struct_,
                 }) });
                 ctx.indenter.inc();
             }
@@ -222,7 +222,7 @@ pub fn Refactor(comptime W: type) type {
         pub fn writeType(ctx: *WriteContext, reader: schema.Type.Reader, gt: type_context, with_error: bool) E!void {
             if (with_error) {
                 switch (reader.which()) {
-                    .list, .data, .text => {
+                    .list, .data, .text, .struct_ => {
                         try ctx.writer.writeAll("capnp.Error!");
                     },
                     else => {},
@@ -249,12 +249,6 @@ pub fn Refactor(comptime W: type) type {
                 },
                 .enum_ => ctx.pathTable.get(reader.getEnum().?.getTypeId()).?,
                 .struct_ => {
-                    switch (gt) {
-                        .base => {},
-                        else => {
-                            try ctx.writer.writeAll("capnp.Error!");
-                        },
-                    }
                     try ctx.writer.writeAll(ctx.pathTable.get(reader.getStruct().?.getTypeId()).?);
                     try ctx.writer.writeAll(switch (gt) {
                         .base => "",
@@ -375,15 +369,18 @@ pub fn Refactor(comptime W: type) type {
                             try ctx.writer.writeAll("return;\n");
                             try ctx.closeSetter();
                         },
+
                         .bool => {
                             try ctx.openSetter(try field.getName(), "bool", "void");
                             try ctx.writeIndent();
                             try ctx.writer.print("self.builder.setBoolField({d}, value);\n", .{slot.getOffset()});
                             try ctx.closeSetter();
                         },
+
                         inline .int8, .int16, .int32, .int64, .uint8, .uint16, .uint32, .uint64 => |typeTag| {
                             const typeTagName = @tagName(typeTag);
                             const zigTypeName = zigNameHelper(typeTagName, if (typeTagName[0] == 'u') 4 else 3);
+
                             try ctx.openSetter(try field.getName(), zigTypeName, "void");
                             try ctx.writeIndent();
 
@@ -394,6 +391,53 @@ pub fn Refactor(comptime W: type) type {
                                     slot.getOffset(),
                                 },
                             );
+                            try ctx.closeSetter();
+                        },
+
+                        inline .float32, .float64 => |typeTag| {
+                            const typeTagName = @tagName(typeTag);
+                            const zigTypeName = zigNameHelper(typeTagName, 5);
+
+                            try ctx.openSetter(try field.getName(), zigTypeName, "void");
+                            try ctx.writeIndent();
+
+                            try ctx.writer.print(
+                                "self.builder.setFloatField({s}, {d}, value);\n",
+                                .{
+                                    zigTypeName,
+                                    slot.getOffset(),
+                                },
+                            );
+                            try ctx.closeSetter();
+                        },
+
+                        .text => {
+                            try ctx.openSetter(try field.getName(), "[:0]const u8", "capnp.Error!void");
+                            try ctx.writeIndent();
+                            try ctx.writer.print("try self.builder.setTextField({d}, value);\n", .{slot.getOffset()});
+                            try ctx.closeSetter();
+                        },
+
+                        .data => {
+                            try ctx.openSetter(try field.getName(), "[]const u8", "capnp.Error!void");
+                            try ctx.writeIndent();
+                            try ctx.writer.print("try self.builder.setDataField({d}, value);\n", .{slot.getOffset()});
+                            try ctx.closeSetter();
+                        },
+
+                        .list => {
+                            const elementType = try t.getList().?.getElementType();
+                            try ctx.openSetter(try field.getName(), typed(.{ .ctx = ctx, .gt = .reader_getter, .typ = t, .with_error = false }), "capnp.Error!void");
+                            try ctx.writeIndent();
+                            try ctx.writer.print("return self.builder.setListField({}, {d}, value);\n", .{ typed(.{ .ctx = ctx, .gt = .base, .typ = elementType, .with_error = false }), slot.getOffset() });
+                            try ctx.closeSetter();
+                        },
+
+                        .struct_ => {
+                            try ctx.openSetter(try field.getName(), typed(.{ .ctx = ctx, .gt = .reader_getter, .typ = t, .with_error = false }), "capnp.Error!void");
+                            try ctx.writeIndent();
+
+                            try ctx.writer.print("return self.builder.setStructField({}, {d}, value);\n", .{ typed(.{ .ctx = ctx, .gt = .base, .typ = t, .with_error = false }), slot.getOffset() });
                             try ctx.closeSetter();
                         },
 
@@ -587,7 +631,7 @@ test "node" {
         "pub fn setFloat32(self: @This(), value: f32) void {\n    self.builder.setFloatField(f32, 0, value);\n}",
         "pub fn setText(self: @This(), value: [:0]const u8) capnp.Error!void {\n    try self.builder.setTextField(0, value);\n}",
         "pub fn setData(self: @This(), value: []const u8) capnp.Error!void {\n    try self.builder.setDataField(0, value);\n}",
-        "pub fn setInt32List(self: @This(), value: ) capnp.Error!void {\n    return self.builder.setListField(i32, value);\n}",
+        "pub fn setInt32List(self: @This(), value: capnp.List(i32).Reader) capnp.Error!void {\n    return self.builder.setListField(i32, 0, value);\n}",
         "pub fn setStruct(self: @This(), value: _Root.TestStruct.Reader) capnp.Error!void {\n    return self.builder.setStructField(_Root.TestStruct, 0, value);\n}",
     };
 
