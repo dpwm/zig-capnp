@@ -117,12 +117,12 @@ pub const ReadContext = struct {
 
     pub fn readIntWithBound(self: ReadContext, comptime T: type, offset: u32, boundWords: u29) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]) else 0;
+        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readInt(T, self.segments[self.segment][pos..][0..@sizeOf(T)], .little) else 0;
     }
 
     pub fn readInt(self: ReadContext, comptime T: type, offset: u32) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return std.mem.readIntLittle(T, self.segments[self.segment][pos..][0..@sizeOf(T)]);
+        return std.mem.readInt(T, self.segments[self.segment][pos..][0..@sizeOf(T)], .little);
     }
 
     pub fn readPtrN(self: ReadContext) Ptr {
@@ -433,7 +433,7 @@ pub fn ListBuilder(comptime T: type) type {
 
 pub fn List(comptime T: type) type {
     switch (@typeInfo(T)) {
-        .Struct => {
+        .@"struct" => {
             return struct {
                 pub const Builder = CompositeListBuilder(T);
                 pub const Reader = CompositeListReader(T);
@@ -600,7 +600,7 @@ pub const Message = struct {
 
         std.debug.assert(4 == try file.read(buffer[0..4]));
 
-        const segmentCount = 1 + std.mem.readIntLittle(u32, buffer[0..4]);
+        const segmentCount = 1 + std.mem.readInt(u32, buffer[0..4], .little);
 
         // std.debug.print("segmentCount = {}\n", .{segmentCount});
 
@@ -611,7 +611,7 @@ pub const Message = struct {
         const segments = try allocator.alloc([]u8, segmentCount * ELEMENTS);
 
         for (0..segmentCount) |i| {
-            const segmentWords = std.mem.readIntLittle(u32, segmentLengthsBuffer[i * 4 ..][0..4]);
+            const segmentWords = std.mem.readInt(u32, segmentLengthsBuffer[i * 4 ..][0..4], .little);
             segments[i] = try allocator.alloc(u8, segmentWords * 8 * BYTES);
             std.debug.assert(segments[i].len == try file.read(segments[i]));
         }
@@ -646,17 +646,17 @@ pub const BuildContext = struct {
 
     pub fn readIntWithBound(self: BuildContext, comptime T: type, offset: u32, boundWords: u29) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)]) else 0;
+        return if (@sizeOf(T) * offset < boundWords << 3) std.mem.readInt(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)], .little) else 0;
     }
 
     pub fn readInt(self: BuildContext, comptime T: type, offset: u32) T {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return std.mem.readIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)]);
+        return std.mem.readInt(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)], .little);
     }
 
     pub fn writeInt(self: BuildContext, comptime T: type, offset: u32, value: T) void {
         const pos = self.offsetBytes() + @sizeOf(T) * offset;
-        return std.mem.writeIntLittle(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)], value);
+        return std.mem.writeInt(T, self.segments.*[self.segment][pos..][0..@sizeOf(T)], value, .little);
     }
 
     pub fn writePtr(self: *BuildContext, ptr: Ptr) void {
