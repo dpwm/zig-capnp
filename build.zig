@@ -29,6 +29,17 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     b.installArtifact(lib);
 
+    const compiler_exe = b.addExecutable(.{
+        .name = "zig-capnp",
+        // In this case the main source file is merely a path, however, in more
+        // complicated build scripts, this could be a generated file.
+        .root_source_file = b.path("src/compiler.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    b.installArtifact(compiler_exe);
+
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const main_tests = b.addTest(.{
