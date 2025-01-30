@@ -120,6 +120,7 @@ const type_context = enum {
     builder_getter,
 };
 
+// This is effectively like a functor (a parametrerized module) in OCaml.
 pub fn Refactor(comptime W: type) type {
     return struct {
         const WriterType = W;

@@ -2,7 +2,6 @@ const std = @import("std");
 const capnp = @import("capnp.zig");
 const schema = @import("schema.zig");
 const Allocator = std.mem.Allocator;
-const Refactor = @import("refactor.zig").Refactor();
 
 const NodeIdMap = std.AutoHashMap(u64, schema.Node.Reader);
 
@@ -241,8 +240,8 @@ pub fn TypeTransformers(comptime WriterType: type) type {
             pub fn writeReaderGetExpression(args: Args) Error!void {
                 try args.writer.writeAll("try self.reader.readPtrField(");
                 // try self.zigType((try list.getElementType()));
-                const slot = (try args.field.?.which()).slot;
-                try TT.writeReaderType(.{ .writer = args.writer, .typ = try slot.getType(), .transformer = args.transformer });
+                const slot = args.field.?.getSlot().?;
+                try TT.writeReaderType(.{ .writer = args.writer, .typ = slot.getType(), .transformer = args.transformer });
                 try args.writer.print(", {})", .{slot.getOffset()});
 
                 try args.writer.writeAll("");
@@ -586,7 +585,7 @@ pub fn Transformer(comptime WriterType: type) type {
 
         pub fn print_file(self: *Self, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
             const node = self.hashMap.get(requestedFile.getId()).?;
-            switch (try node.which()) {
+            switch (node.which()) {
                 .file => |file| {
                     _ = file;
                     try self.writer.toplevelImports();
@@ -602,7 +601,7 @@ pub fn Transformer(comptime WriterType: type) type {
 
         pub fn print_node(self: *Self, nodeId: u64, name: anytype) Error!void {
             const node = self.hashMap.get(nodeId) orelse return Allocator.Error.OutOfMemory;
-            switch (try node.which()) {
+            switch (node.which()) {
                 .struct_ => |struct_| {
                     try self.writer.openStruct(name);
 
@@ -764,7 +763,7 @@ const PathTable = struct {
         }
         {
             var buffer = std.mem.zeroes([128]u8);
-            switch (try node.which()) {
+            switch (node.which()) {
                 .struct_ => |struct_| {
                     var field_it = (try struct_.getFields()).iter();
                     while (field_it.next()) |field| {
@@ -811,7 +810,7 @@ test "test2" {
     defer hashMap.deinit();
 
     try populateLookupTable(&hashMap, s);
-    var out = capnpWriter(std.io.getStdOut().writer());
+    const out = capnpWriter(std.io.getStdOut().writer());
     var reserved_names = std.StringHashMap(void).init(std.testing.allocator);
     defer reserved_names.deinit();
     try reserved_names.put("struct", {});
@@ -862,7 +861,7 @@ pub fn main() !void {
     defer hashMap.deinit();
 
     try populateLookupTable(&hashMap, s);
-    var out = capnpWriter(std.io.getStdOut().writer());
+    const out = capnpWriter(std.io.getStdOut().writer());
     var reserved_names = std.StringHashMap(void).init(allocator);
     defer reserved_names.deinit();
     try reserved_names.put("struct", {});
