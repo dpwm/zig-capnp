@@ -196,7 +196,7 @@ pub fn Refactor(comptime W: type) type {
                         .reader => .reader_getter,
                         .builder => .builder_getter,
                     },
-                    .with_error = gt == .reader or typ.which() == .struct_,
+                    .with_error = true,
                 }) });
                 ctx.indenter.inc();
             }
@@ -594,8 +594,8 @@ test "node" {
         "pub fn getFloat32(self: @This()) f32 {\n    return self.reader.readFloatField(f32, 0);\n}",
         "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.reader.readStringField(0);\n}",
         "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.reader.readDataField(0);\n}",
-        //"pub fn getInt32List(self: @This()) capnp.List(i32).Reader {\n    return self.reader.readListField(i32, 0);\n}",
-        //"pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.Error!capnp.List(i32).Reader {\n    return self.reader.readListField(i32, 0);\n}",
+        "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Reader {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
     inline for (0.., reader_getters) |i, getterText| {
@@ -612,9 +612,9 @@ test "node" {
         "pub fn getBool(self: @This()) bool {\n    return self.builder.readBoolField(0);\n}",
         "pub fn getInt32(self: @This()) i32 {\n    return self.builder.readIntField(i32, 0);\n}",
         "pub fn getFloat32(self: @This()) f32 {\n    return self.builder.readFloatField(f32, 0);\n}",
-        "pub fn getText(self: @This()) [:0]const u8 {\n    return self.builder.readStringField(0);\n}",
-        "pub fn getData(self: @This()) []const u8 {\n    return self.builder.readDataField(0);\n}",
-        "pub fn getInt32List(self: @This()) capnp.List(i32).Builder {\n    return self.builder.readListField(i32, 0);\n}",
+        "pub fn getText(self: @This()) capnp.Error![:0]const u8 {\n    return self.builder.readStringField(0);\n}",
+        "pub fn getData(self: @This()) capnp.Error![]const u8 {\n    return self.builder.readDataField(0);\n}",
+        "pub fn getInt32List(self: @This()) capnp.Error!capnp.List(i32).Builder {\n    return self.builder.readListField(i32, 0);\n}",
         "pub fn getStruct(self: @This()) capnp.Error!_Root.TestStruct.Builder {\n    return self.reader.readStructField(_Root.TestStruct, 0);\n}",
     };
 
