@@ -264,6 +264,18 @@ pub fn Refactor(comptime W: type) type {
             try ctx.writer.writeAll(out);
         }
 
+        pub fn writeNode(ctx: *WriteContext, name: []const u8, node: schema.Node.Reader) E!void {
+            switch (node.which()) {
+                .@"struct" => {
+                    try ctx.writer.print("const {s} = struct {{\n", .{name});
+                    ctx.indenter.inc();
+                    ctx.indenter.dec();
+                    try ctx.writer.writeAll("};\n");
+                },
+                else => @panic("Not implemented"),
+            }
+        }
+
         pub fn writeGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
             const target = gt.toString();
 
@@ -642,4 +654,9 @@ test "node" {
         try M.writeSetter(&ctx, field);
         try std.testing.expectEqualStrings(setterText, fbs.getWritten());
     }
+
+    const node_full_expected = "const TestStruct = struct {\n};\n";
+    fbs.reset();
+    try M.writeNode(&ctx, "TestStruct", reader);
+    try std.testing.expectEqualStrings(node_full_expected, fbs.getWritten());
 }
