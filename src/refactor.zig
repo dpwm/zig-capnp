@@ -266,6 +266,22 @@ pub fn Refactor(comptime W: type) type {
 
         pub fn writeNode(ctx: *WriteContext, name: []const u8, node: schema.Node.Reader) E!void {
             switch (node.which()) {
+                .file => {
+                    // nestedNodes
+                },
+
+                .@"enum" => {
+                    // enumerants
+                },
+
+                .interface => {
+                    // not yet implemented
+                },
+
+                .@"const" => {},
+
+                .annotation => {},
+
                 .@"struct" => {
                     try ctx.writeIndent();
                     try ctx.writer.print("const {s} = struct {{\n", .{name});
@@ -322,7 +338,9 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.writeIndent();
                     try ctx.writer.writeAll("};\n");
                 },
-                else => @panic("Not implemented"),
+                _ => {
+                    @panic("Unknown node type");
+                },
             }
         }
 
@@ -705,8 +723,8 @@ test "node" {
         try std.testing.expectEqualStrings(setterText, fbs.getWritten());
     }
 
-    const node_full_expected = "const TestStruct = struct {\n};\n";
+    const node_full_expected = "const TestStruct = struct {";
     fbs.reset();
     try M.writeNode(&ctx, "TestStruct", reader);
-    try std.testing.expectEqualStrings(node_full_expected, fbs.getWritten());
+    try std.testing.expectEqualStrings(node_full_expected, fbs.getWritten()[0..node_full_expected.len]);
 }

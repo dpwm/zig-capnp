@@ -226,9 +226,9 @@ pub const Node = struct {
     pub const Tag = enum(u16) {
         file,
         @"struct",
-        enum_,
+        @"enum",
         interface,
-        const_,
+        @"const",
         annotation,
         _,
     };
