@@ -276,8 +276,41 @@ pub fn Refactor(comptime W: type) type {
                     ctx.indenter.inc();
 
                     const fields = try node.getStruct().?.getFields();
+
+                    if (node.getStruct().?.getDiscriminantCount() > 0) {
+                        try ctx.writeIndent();
+                        try ctx.writer.writeAll("const Tag = enum(u16) {");
+                        ctx.indenter.inc();
+
+                        for (0..fields.length) |i| {
+                            const field = fields.get(@intCast(i));
+                            if (field.getDiscriminantValue() == 0xffff) continue;
+                            try ctx.writeIndent();
+                            try ctx.writer.print("{s} = {},\n", .{ try field.getName(), field.getDiscriminantValue() });
+                        }
+
+                        ctx.indenter.dec();
+                        try ctx.writeIndent();
+                        try ctx.writer.writeAll("};");
+                    }
+
                     for (0..fields.length) |i| {
                         try writeGetter(ctx, fields.get(@intCast(i)), .reader);
+                        try ctx.writer.writeAll("\n\n");
+                    }
+
+                    ctx.indenter.dec();
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("};\n");
+
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("const Builder = struct {\n");
+                    ctx.indenter.inc();
+
+                    for (0..fields.length) |i| {
+                        try writeGetter(ctx, fields.get(@intCast(i)), .builder);
+                        try ctx.writer.writeAll("\n\n");
+                        try writeSetter(ctx, fields.get(@intCast(i)));
                         try ctx.writer.writeAll("\n\n");
                     }
 
