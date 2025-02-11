@@ -267,11 +267,28 @@ pub fn Refactor(comptime W: type) type {
         pub fn writeNode(ctx: *WriteContext, name: []const u8, node: schema.Node.Reader) E!void {
             switch (node.which()) {
                 .file => {
-                    // nestedNodes
+                    const nested_nodes = try node.getNestedNodes();
+                    for (0..nested_nodes.length) |i| {
+                        const nested_node = nested_nodes.get(@intCast(i));
+                        try writeNode(ctx, try nested_node.getName(), ctx.pathTable.nodeIdMap.get(nested_node.getId()).?);
+                    }
                 },
 
                 .@"enum" => {
-                    // enumerants
+                    try ctx.writeIndent();
+                    try ctx.writer.print("const {s} = enum {{\n", .{name});
+                    ctx.indenter.inc();
+
+                    const enumerants = try node.getEnum().?.getEnumerants();
+                    for (0..enumerants.length) |i| {
+                        const enumerant = enumerants.get(@intCast(i));
+                        try ctx.writeIndent();
+                        try ctx.writer.print("{s},\n", .{try enumerant.getName()});
+                    }
+
+                    try ctx.writeIndent();
+                    ctx.indenter.dec();
+                    try ctx.writer.writeAll("}\n");
                 },
 
                 .interface => {
@@ -313,6 +330,13 @@ pub fn Refactor(comptime W: type) type {
                     for (0..fields.length) |i| {
                         try writeGetter(ctx, fields.get(@intCast(i)), .reader);
                         try ctx.writer.writeAll("\n\n");
+                    }
+
+                    // Nested nodes
+                    const nested_nodes = try node.getNestedNodes();
+                    for (0..nested_nodes.length) |i| {
+                        const nested_node = nested_nodes.get(@intCast(i));
+                        try writeNode(ctx, try nested_node.getName(), ctx.pathTable.nodeIdMap.get(nested_node.getId()).?);
                     }
 
                     ctx.indenter.dec();

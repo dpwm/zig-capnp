@@ -248,6 +248,10 @@ pub const Node = struct {
             return self.reader.readIntField(u64, 0) ^ 0;
         }
 
+        pub fn getEnum(self: @This()) ?enum_.Reader {
+            return .{ .reader = self.reader };
+        }
+
         pub fn getDisplayName(self: @This()) capnp.Error![]const u8 {
             return try self.reader.readStringField(0);
         }
