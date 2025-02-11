@@ -267,9 +267,26 @@ pub fn Refactor(comptime W: type) type {
         pub fn writeNode(ctx: *WriteContext, name: []const u8, node: schema.Node.Reader) E!void {
             switch (node.which()) {
                 .@"struct" => {
+                    try ctx.writeIndent();
                     try ctx.writer.print("const {s} = struct {{\n", .{name});
                     ctx.indenter.inc();
+
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("const Reader = struct {\n");
+                    ctx.indenter.inc();
+
+                    const fields = try node.getStruct().?.getFields();
+                    for (0..fields.length) |i| {
+                        try writeGetter(ctx, fields.get(@intCast(i)), .reader);
+                        try ctx.writer.writeAll("\n\n");
+                    }
+
                     ctx.indenter.dec();
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("};\n");
+
+                    ctx.indenter.dec();
+                    try ctx.writeIndent();
                     try ctx.writer.writeAll("};\n");
                 },
                 else => @panic("Not implemented"),
@@ -571,7 +588,7 @@ test "field" {
 }
 
 test "node" {
-    var buf = std.mem.zeroes([1024]u8);
+    var buf = std.mem.zeroes([64 * 1024]u8);
     var fbs = std.io.fixedBufferStream(&buf);
     const writer = fbs.writer();
 
