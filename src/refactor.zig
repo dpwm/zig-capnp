@@ -291,7 +291,7 @@ pub fn Refactor(comptime W: type) type {
 
                         ctx.indenter.dec();
                         try ctx.writeIndent();
-                        try ctx.writer.writeAll("};");
+                        try ctx.writer.writeAll("};\n\n");
                     }
 
                     for (0..fields.length) |i| {
