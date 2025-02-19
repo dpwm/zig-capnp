@@ -752,3 +752,100 @@ test "node" {
     try M.writeNode(&ctx, "TestStruct", reader);
     try std.testing.expectEqualStrings(node_full_expected, fbs.getWritten()[0..node_full_expected.len]);
 }
+
+fn write_name(node_table: NodeIdMap, node: *const schema.Node.Reader) !void {
+    // cppFullName first checks scopeID isn’t zero,
+
+    var current_node = node.*;
+    var ancestors = try std.BoundedArray(u64, 64).init(0);
+
+    try ancestors.append(current_node.getId());
+    var scope_id = current_node.getScopeId();
+
+    //  We need to do this in the main
+
+    // Get all ancestors
+    while (scope_id != 0) {
+        try ancestors.append(scope_id);
+        current_node = node_table.get(scope_id).?;
+        scope_id = current_node.getScopeId();
+    }
+
+    // ASSUME This works because files should always be the outermost scope.
+    if (current_node.which() == .file) {
+        std.debug.print("{s}", .{try node.getDisplayName()});
+    }
+
+    // todo check if file and give sane error message etc
+    //
+    _ = ancestors.pop();
+
+    while (ancestors.popOrNull()) |child_node_id| {
+        const parent_nested_nodes = try current_node.getNestedNodes();
+        const scope_name: []const u8 = result: for (0..parent_nested_nodes.length) |i| {
+            const nested_node = parent_nested_nodes.get(@intCast(i));
+            if (nested_node.getId() == child_node_id) {
+                break :result try nested_node.getName();
+            }
+        } else {
+            // It must be a group from a field
+            const fields = try current_node.getStruct().?.getFields();
+            for (0..fields.length) |i| {
+                const field = fields.get(@intCast(i));
+                if (field.getGroup()) |group| {
+                    if (group.getTypeId() == child_node_id) {
+                        break :result try field.getName();
+                    }
+                }
+            }
+            @panic("No link from parent to child – this should never happen");
+        };
+        std.debug.print(".{s}", .{scope_name});
+        current_node = node_table.get(child_node_id).?;
+    }
+    std.debug.print("\n", .{});
+}
+
+test "compiler" {
+    // var buf = std.mem.zeroes([64 * 1024]u8);
+    // var fbs = std.io.fixedBufferStream(&buf);
+    // const writer = fbs.writer();
+
+    // const M = Refactor(@TypeOf(writer));
+
+    var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
+    defer file.close();
+
+    var message = try capnp.Message.fromFile(file, std.testing.allocator);
+    defer message.deinit(std.testing.allocator);
+
+    var nodeTable = NodeIdMap.init(std.testing.allocator);
+    defer nodeTable.deinit();
+
+    const request = try message.getRootStruct(schema.CodeGeneratorRequest);
+
+    // We need to populate the node table
+    const nodes = try request.getNodes();
+    for (0..nodes.length) |i| {
+        const node = nodes.get(@intCast(i));
+        // We need to step back up
+        try nodeTable.put(node.getId(), node);
+    }
+
+    for (0..nodes.length) |i| {
+        const node = nodes.get(@intCast(i));
+        try write_name(nodeTable, &node);
+    }
+
+    // We also need to walk the nodes and give them a name
+    var pathTable = PathTable.init(nodeTable);
+    defer pathTable.deinit();
+
+    // var ctx = M.WriteContext{
+    //     .writer = writer,
+    //     .indenter = M.Indenter{},
+    //     .pathTable = pathTable,
+    // };
+
+    // M.writeNode(ctx, , )
+}
