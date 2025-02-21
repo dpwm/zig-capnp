@@ -121,7 +121,8 @@ pub fn Refactor(comptime W: type) type {
                         return node;
                     }
                 } else {
-                    @panic("Node not found");
+                    std.debug.print("Node {} not found\n", .{id});
+                    @panic("getNodeById: Node not found");
                 }
                 // We panic if the node is not present. After all, what else can we do?
 
@@ -181,7 +182,6 @@ pub fn Refactor(comptime W: type) type {
                     try self.writer.print(".{s}", .{scope_name});
                     current_node = self.getNodeById(child_node_id);
                 }
-                try self.writer.writeAll("\n");
             }
 
             pub fn writeIndent(self: *WriteContext) E!void {
@@ -457,6 +457,10 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.closeGetter();
                 },
                 .group => {
+                    if (field.getGroup().?.getTypeId() == 0) {
+                        std.debug.print("Problem with group {s} {}\n", .{ try field.getName(), field.getGroup().?.getTypeId() });
+                        @panic("ERROR");
+                    }
                     try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
                 },
                 else => {},
@@ -644,9 +648,10 @@ test "field" {
 }
 
 test "compiler" {
-    var buf = std.mem.zeroes([65 * 1024]u8);
-    var fbs = std.io.fixedBufferStream(&buf);
-    const writer = fbs.writer();
+    // var buf = std.mem.zeroes([65 * 1024]u8);
+    // var fbs = std.io.fixedBufferStream(&buf);
+    // const writer = fbs.writer();
+    const writer = std.io.getStdOut().writer();
 
     const M = Refactor(@TypeOf(writer));
 
@@ -660,12 +665,21 @@ test "compiler" {
 
     const nodes = try request.getNodes();
 
-    const ctx = M.WriteContext{
+    var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
         .nodes = nodes,
     };
-    _ = ctx;
 
-    // M.writeNode(ctx, , )
+    const files = try request.getRequestedFiles();
+    const requested_file = ctx.getNodeById(files.get(@intCast(0)).getId());
+
+    std.debug.print("file_id = {x}\n", .{requested_file.getId()});
+
+    // for (0..nodes.length) |i| {
+    //     const node = nodes.get(@intCast(i));
+    //     try ctx.writeNodeName(node);
+    //     try ctx.writer.writeAll("\n");
+    // }
+    try M.writeNode(&ctx, "", requested_file);
 }

@@ -359,7 +359,7 @@ pub const Field = struct {
         reader: capnp.StructReader,
 
         pub fn which(self: @This()) Field.Tag {
-            return @enumFromInt(self.reader.readIntField(u16, 0));
+            return @enumFromInt(self.reader.readIntField(u16, 4));
         }
 
         pub fn getSlot(self: @This()) ?slot.Reader {
