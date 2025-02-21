@@ -3,74 +3,6 @@
 const schema = @import("schema.zig");
 const std = @import("std");
 const capnp = @import("capnp.zig");
-const Allocator = std.mem.Allocator;
-
-const NodeIdMap = std.AutoHashMap(u64, schema.Node.Reader);
-
-const PathTable = struct {
-    const PathMap = std.AutoHashMap(u64, []const u8);
-    const Error = std.fmt.BufPrintError || Allocator.Error || capnp.Counter.Error;
-    pathMap: PathMap,
-    nodeIdMap: NodeIdMap,
-    allocator: Allocator,
-
-    pub fn init(nodeIdMap: NodeIdMap) PathTable {
-        const allocator = nodeIdMap.allocator;
-        return PathTable{ .pathMap = PathMap.init(allocator), .allocator = allocator, .nodeIdMap = nodeIdMap };
-    }
-    pub fn update(self: *PathTable, name: []const u8, nodeId: u64) Error!void {
-        const node = self.nodeIdMap.get(nodeId).?;
-
-        var path: []const u8 = "";
-        if (self.pathMap.get(node.getScopeId())) |parentName| {
-            path = try std.fmt.allocPrint(self.allocator, "{s}.{s}", .{ parentName, name });
-        } else {
-            path = try std.fmt.allocPrint(self.allocator, "{s}", .{name});
-        }
-
-        try self.pathMap.put(node.getId(), path);
-        {
-            var it = (try node.getNestedNodes()).iter();
-            while (it.next()) |nestedNode| {
-                try self.update(try nestedNode.getName(), nestedNode.getId());
-            }
-        }
-        {
-            var buffer = std.mem.zeroes([128]u8);
-            switch (try node.which()) {
-                .struct_ => |struct_| {
-                    var field_it = (try struct_.getFields()).iter();
-                    while (field_it.next()) |field| {
-                        switch (try field.which()) {
-                            .group => |group| {
-                                const groupName = try std.fmt.bufPrint(&buffer, "_Group.{s}", .{try field.getName()});
-                                try self.update(groupName, group.getTypeId());
-                            },
-                            else => {},
-                        }
-                    }
-                },
-                else => {},
-            }
-        }
-    }
-
-    pub fn get(self: PathTable, id: u64) ?[]const u8 {
-        return self.pathMap.get(id);
-    }
-
-    pub fn updateFile(self: *PathTable, requestedFile: schema.CodeGeneratorRequest.RequestedFile.Reader) Error!void {
-        try self.update("_Root", requestedFile.getId());
-    }
-
-    pub fn deinit(self: *PathTable) void {
-        var it = self.pathMap.valueIterator();
-        while (it.next()) |value| {
-            self.allocator.free(value.*);
-        }
-        self.pathMap.deinit();
-    }
-};
 
 fn Wrapper(comptime T: type, comptime F: anytype) type {
     return struct {
@@ -179,7 +111,78 @@ pub fn Refactor(comptime W: type) type {
         pub const WriteContext = struct {
             writer: W,
             indenter: Indenter,
-            pathTable: PathTable,
+            nodes: capnp.CompositeListReader(schema.Node) = capnp.CompositeListReader(schema.Node).empty,
+
+            pub fn getNodeById(self: *WriteContext, id: u64) schema.Node.Reader {
+                // Scan through looking for nodes. This is O(N), but could be O(1) if a problem.
+                for (0..self.nodes.length) |i| {
+                    const node = self.nodes.get(@intCast(i));
+                    if (node.getId() == id) {
+                        return node;
+                    }
+                } else {
+                    @panic("Node not found");
+                }
+                // We panic if the node is not present. After all, what else can we do?
+
+            }
+
+            fn writeNodeNameById(self: *WriteContext, id: u64) !void {
+                try self.writeNodeName(self.getNodeById(id));
+            }
+
+            fn writeNodeName(self: *WriteContext, node: schema.Node.Reader) !void {
+                // cppFullName first checks scopeID isn’t zero,
+
+                var current_node = node;
+                var ancestors = std.BoundedArray(u64, 64).init(0) catch @panic("writeNodeName: imposible");
+
+                ancestors.appendAssumeCapacity(current_node.getId());
+                var scope_id = current_node.getScopeId();
+
+                //  We need to do this in the main
+
+                // Get all ancestors
+                while (scope_id != 0) {
+                    ancestors.append(scope_id) catch @panic("writeNodeName: stack overflow");
+                    current_node = self.getNodeById(scope_id);
+                    scope_id = current_node.getScopeId();
+                }
+
+                // ASSUME This works because files should always be the outermost scope.
+                if (current_node.which() == .file) {
+                    try self.writer.print("{s}", .{try node.getDisplayName()});
+                }
+
+                // todo check if file and give sane error message etc
+                //
+                _ = ancestors.pop();
+
+                while (ancestors.popOrNull()) |child_node_id| {
+                    const parent_nested_nodes = try current_node.getNestedNodes();
+                    const scope_name: []const u8 = result: for (0..parent_nested_nodes.length) |i| {
+                        const nested_node = parent_nested_nodes.get(@intCast(i));
+                        if (nested_node.getId() == child_node_id) {
+                            break :result try nested_node.getName();
+                        }
+                    } else {
+                        // It must be a group from a field
+                        const fields = try current_node.getStruct().?.getFields();
+                        for (0..fields.length) |i| {
+                            const field = fields.get(@intCast(i));
+                            if (field.getGroup()) |group| {
+                                if (group.getTypeId() == child_node_id) {
+                                    break :result try field.getName();
+                                }
+                            }
+                        }
+                        @panic("No link from parent to child – this should never happen");
+                    };
+                    try self.writer.print(".{s}", .{scope_name});
+                    current_node = self.getNodeById(child_node_id);
+                }
+                try self.writer.writeAll("\n");
+            }
 
             pub fn writeIndent(self: *WriteContext) E!void {
                 try self.indenter.write(self.writer);
@@ -248,9 +251,12 @@ pub fn Refactor(comptime W: type) type {
                     });
                     return;
                 },
-                .enum_ => ctx.pathTable.get(reader.getEnum().?.getTypeId()).?,
+                .enum_ => {
+                    try ctx.writeNodeNameById(reader.getEnum().?.getTypeId());
+                    return;
+                },
                 .struct_ => {
-                    try ctx.writer.writeAll(ctx.pathTable.get(reader.getStruct().?.getTypeId()).?);
+                    try ctx.writeNodeNameById(reader.getStruct().?.getTypeId());
                     try ctx.writer.writeAll(switch (gt) {
                         .base => "",
                         .reader_getter => ".Reader",
@@ -270,7 +276,7 @@ pub fn Refactor(comptime W: type) type {
                     const nested_nodes = try node.getNestedNodes();
                     for (0..nested_nodes.length) |i| {
                         const nested_node = nested_nodes.get(@intCast(i));
-                        try writeNode(ctx, try nested_node.getName(), ctx.pathTable.nodeIdMap.get(nested_node.getId()).?);
+                        try writeNode(ctx, try nested_node.getName(), ctx.getNodeById(nested_node.getId()));
                     }
                 },
 
@@ -336,7 +342,7 @@ pub fn Refactor(comptime W: type) type {
                     const nested_nodes = try node.getNestedNodes();
                     for (0..nested_nodes.length) |i| {
                         const nested_node = nested_nodes.get(@intCast(i));
-                        try writeNode(ctx, try nested_node.getName(), ctx.pathTable.nodeIdMap.get(nested_node.getId()).?);
+                        try writeNode(ctx, try nested_node.getName(), ctx.getNodeById(nested_node.getId()));
                     }
 
                     ctx.indenter.dec();
@@ -442,20 +448,16 @@ pub fn Refactor(comptime W: type) type {
                             );
                         },
                         .struct_ => {
-                            try ctx.writer.print(
-                                "return self.reader.readStructField({s}, {d});\n",
-                                .{
-                                    ctx.pathTable.get((try field.getSlot().?.getType()).getStruct().?.getTypeId()).?,
-                                    field.getSlot().?.getOffset(),
-                                },
-                            );
+                            try ctx.writer.writeAll("return self.reader.readStructField(");
+                            try ctx.writeNodeNameById((try field.getSlot().?.getType()).getStruct().?.getTypeId());
+                            try ctx.writer.print(", {d});\n", .{field.getSlot().?.getOffset()});
                         },
                         else => {},
                     }
                     try ctx.closeGetter();
                 },
                 .group => {
-                    try ctx.writer.writeAll(ctx.pathTable.get(field.getGroup().?.getTypeId()).?);
+                    try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
                 },
                 else => {},
             }
@@ -550,7 +552,7 @@ pub fn Refactor(comptime W: type) type {
                     }
                 },
                 .group => {
-                    try ctx.writer.writeAll(ctx.pathTable.get(field.getGroup().?.getTypeId()).?);
+                    try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
                 },
                 else => {},
             }
@@ -571,16 +573,9 @@ test "simple" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    var nodeTable = NodeIdMap.init(std.testing.allocator);
-    defer nodeTable.deinit();
-
-    var pathTable = PathTable.init(nodeTable);
-    defer pathTable.deinit();
-
     var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
-        .pathTable = pathTable,
     };
 
     const reader = try message.getRootStruct(schema.Type);
@@ -603,16 +598,9 @@ test "writeReaderGetterReturnType" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    var nodeTable = NodeIdMap.init(std.testing.allocator);
-    defer nodeTable.deinit();
-
-    var pathTable = PathTable.init(nodeTable);
-    defer pathTable.deinit();
-
     var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
-        .pathTable = pathTable,
     };
 
     const reader = try message.getRootStruct(schema.Node);
@@ -640,16 +628,9 @@ test "field" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    var nodeTable = NodeIdMap.init(std.testing.allocator);
-    defer nodeTable.deinit();
-
-    var pathTable = PathTable.init(nodeTable);
-    defer pathTable.deinit();
-
     var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
-        .pathTable = pathTable,
     };
 
     const reader = try message.getRootStruct(schema.Field);
@@ -675,18 +656,9 @@ test "node" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    var nodeTable = NodeIdMap.init(std.testing.allocator);
-    defer nodeTable.deinit();
-
-    var pathTable = PathTable.init(nodeTable);
-    defer pathTable.deinit();
-
-    try pathTable.pathMap.put(0x0, try std.testing.allocator.dupe(u8, "_Root.TestStruct"));
-
     var ctx = M.WriteContext{
         .writer = writer,
         .indenter = M.Indenter{},
-        .pathTable = pathTable,
     };
 
     const reader = try message.getRootStruct(schema.Node);
@@ -753,65 +725,12 @@ test "node" {
     try std.testing.expectEqualStrings(node_full_expected, fbs.getWritten()[0..node_full_expected.len]);
 }
 
-fn write_name(node_table: NodeIdMap, node: *const schema.Node.Reader) !void {
-    // cppFullName first checks scopeID isn’t zero,
-
-    var current_node = node.*;
-    var ancestors = try std.BoundedArray(u64, 64).init(0);
-
-    try ancestors.append(current_node.getId());
-    var scope_id = current_node.getScopeId();
-
-    //  We need to do this in the main
-
-    // Get all ancestors
-    while (scope_id != 0) {
-        try ancestors.append(scope_id);
-        current_node = node_table.get(scope_id).?;
-        scope_id = current_node.getScopeId();
-    }
-
-    // ASSUME This works because files should always be the outermost scope.
-    if (current_node.which() == .file) {
-        std.debug.print("{s}", .{try node.getDisplayName()});
-    }
-
-    // todo check if file and give sane error message etc
-    //
-    _ = ancestors.pop();
-
-    while (ancestors.popOrNull()) |child_node_id| {
-        const parent_nested_nodes = try current_node.getNestedNodes();
-        const scope_name: []const u8 = result: for (0..parent_nested_nodes.length) |i| {
-            const nested_node = parent_nested_nodes.get(@intCast(i));
-            if (nested_node.getId() == child_node_id) {
-                break :result try nested_node.getName();
-            }
-        } else {
-            // It must be a group from a field
-            const fields = try current_node.getStruct().?.getFields();
-            for (0..fields.length) |i| {
-                const field = fields.get(@intCast(i));
-                if (field.getGroup()) |group| {
-                    if (group.getTypeId() == child_node_id) {
-                        break :result try field.getName();
-                    }
-                }
-            }
-            @panic("No link from parent to child – this should never happen");
-        };
-        std.debug.print(".{s}", .{scope_name});
-        current_node = node_table.get(child_node_id).?;
-    }
-    std.debug.print("\n", .{});
-}
-
 test "compiler" {
-    // var buf = std.mem.zeroes([64 * 1024]u8);
-    // var fbs = std.io.fixedBufferStream(&buf);
-    // const writer = fbs.writer();
+    var buf = std.mem.zeroes([64 * 1024]u8);
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
 
-    // const M = Refactor(@TypeOf(writer));
+    const M = Refactor(@TypeOf(writer));
 
     var file = try std.fs.cwd().openFile("capnp-tests/06_schema.capnp.original.1.bin", .{});
     defer file.close();
@@ -819,33 +738,16 @@ test "compiler" {
     var message = try capnp.Message.fromFile(file, std.testing.allocator);
     defer message.deinit(std.testing.allocator);
 
-    var nodeTable = NodeIdMap.init(std.testing.allocator);
-    defer nodeTable.deinit();
-
     const request = try message.getRootStruct(schema.CodeGeneratorRequest);
 
-    // We need to populate the node table
     const nodes = try request.getNodes();
-    for (0..nodes.length) |i| {
-        const node = nodes.get(@intCast(i));
-        // We need to step back up
-        try nodeTable.put(node.getId(), node);
-    }
 
-    for (0..nodes.length) |i| {
-        const node = nodes.get(@intCast(i));
-        try write_name(nodeTable, &node);
-    }
-
-    // We also need to walk the nodes and give them a name
-    var pathTable = PathTable.init(nodeTable);
-    defer pathTable.deinit();
-
-    // var ctx = M.WriteContext{
-    //     .writer = writer,
-    //     .indenter = M.Indenter{},
-    //     .pathTable = pathTable,
-    // };
+    const ctx = M.WriteContext{
+        .writer = writer,
+        .indenter = M.Indenter{},
+        .nodes = nodes,
+    };
+    _ = ctx;
 
     // M.writeNode(ctx, , )
 }

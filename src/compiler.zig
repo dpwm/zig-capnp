@@ -293,7 +293,7 @@ pub fn TypeTransformers(comptime WriterType: type) type {
             }
         };
 
-        pub fn getTypeTransformer(comptime typ: std.meta.Tag(schema.Type.Reader._Tag)) type {
+        pub fn getTypeTransformer(comptime typ: schema.Type.Tag) type {
             return switch (typ) {
                 .void => Void,
                 .list => List,
@@ -306,9 +306,8 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         }
 
         pub fn writeWrapper(comptime name: []const u8, args: Args) Error!void {
-            switch (args.typ.?.which() catch .void) {
-                inline else => |x, tag| {
-                    _ = x;
+            switch (args.typ.?.which()) {
+                inline else => |tag| {
                     //@compileLog(tag);
                     const tt = getTypeTransformer(tag);
                     try @field(tt, name)(args);
@@ -321,8 +320,9 @@ pub fn TypeTransformers(comptime WriterType: type) type {
         }
 
         pub fn writeReaderGetExpression(args: Args) Transformer(WriterType).Error!void {
-            switch (try args.field.?.which()) {
-                .slot => |slot| {
+            switch (args.field.?.which()) {
+                .slot => {
+                    const slot = args.field.?.getSlot().?;
                     var args_ = args;
                     args_.typ = try slot.getType();
                     return try writeWrapper("writeReaderGetExpression", args_);
@@ -602,7 +602,8 @@ pub fn Transformer(comptime WriterType: type) type {
         pub fn print_node(self: *Self, nodeId: u64, name: anytype) Error!void {
             const node = self.hashMap.get(nodeId) orelse return Allocator.Error.OutOfMemory;
             switch (node.which()) {
-                .struct_ => |struct_| {
+                .struct_ => {
+                    const struct_ = node.getStruct().?;
                     try self.writer.openStruct(name);
 
                     try self.writer.printLine("const id: u64 = 0x{x};\n", .{node.getId()});
@@ -611,8 +612,9 @@ pub fn Transformer(comptime WriterType: type) type {
                         try self.writer.openStruct("_Group");
                         var field_it = (try struct_.getFields()).iter();
                         while (field_it.next()) |field| {
-                            switch (try field.which()) {
-                                .group => |group| {
+                            switch (field.which()) {
+                                .group => {
+                                    const group = field.getGroup().?;
                                     try self.print_node(group.getTypeId(), Capitalized.wrap(try field.getName()));
                                 },
                                 else => {},
@@ -712,7 +714,8 @@ pub fn Transformer(comptime WriterType: type) type {
                     try self.writer.closeStruct();
                 },
 
-                .enum_ => |enum_| {
+                .enum_ => {
+                    const enum_ = node.getEnum().?;
                     try self.writer.printLine("pub const {s} = enum {{", .{name});
                     self.writer.indent += 1;
                     {

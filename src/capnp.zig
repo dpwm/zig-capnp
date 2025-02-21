@@ -523,13 +523,15 @@ pub fn CompositeListReader(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        context: ReadContext,
+        context: ?ReadContext,
 
         elementSize: u3,
         length: u29,
 
         dataWords: u16,
         ptrWords: u16,
+
+        pub const empty = Self{ .context = null, .elementSize = 0, .length = 0, .dataWords = 0, .ptrWords = 0 };
 
         pub fn fromReadContext(context: ReadContext) Counter.Error!Self {
             // for now, ignore the possibility that this may be a far pointer.
@@ -577,7 +579,7 @@ pub fn CompositeListReader(comptime T: type) type {
         pub fn get(self: Self, ix: u32) T.Reader {
             std.debug.assert(ix < self.length);
 
-            var _context = self.context;
+            var _context = self.context.?;
             _context.relativeWords(@intCast((self.ptrWords + self.dataWords) * ix));
 
             return T.Reader{
