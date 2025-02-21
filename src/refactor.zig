@@ -152,7 +152,8 @@ pub fn Refactor(comptime W: type) type {
 
                 // ASSUME This works because files should always be the outermost scope.
                 if (current_node.which() == .file) {
-                    try self.writer.print("{s}", .{try node.getDisplayName()});
+                    // try self.writer.print("{s}", .{try node.getDisplayName()});
+                    try self.writer.writeAll("_Root");
                 }
 
                 // todo check if file and give sane error message etc
@@ -318,7 +319,7 @@ pub fn Refactor(comptime W: type) type {
 
                     if (node.getStruct().?.getDiscriminantCount() > 0) {
                         try ctx.writeIndent();
-                        try ctx.writer.writeAll("const Tag = enum(u16) {");
+                        try ctx.writer.writeAll("const Tag = enum(u16) {\n");
                         ctx.indenter.inc();
 
                         for (0..fields.length) |i| {
