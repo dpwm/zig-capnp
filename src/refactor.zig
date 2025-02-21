@@ -242,7 +242,7 @@ pub fn Refactor(comptime W: type) type {
                 .data => "[]const u8",
                 .list => {
                     try ctx.writer.writeAll("capnp.List(");
-                    try writeType(ctx, try reader.getList().?.getElementType(), .base, true);
+                    try writeType(ctx, try reader.getList().?.getElementType(), .base, false);
                     try ctx.writer.writeAll(")");
                     try ctx.writer.writeAll(switch (gt) {
                         .base => "",
