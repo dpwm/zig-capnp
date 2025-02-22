@@ -52,6 +52,29 @@ const type_context = enum {
     builder_getter,
 };
 
+const keywords: [3][]const u8 = .{ "struct", "enum", "const" };
+
+fn isKeyword(name: []const u8) bool {
+    const hashed = std.hash.Wyhash.hash(0, name);
+    for (keywords) |keyword| {
+        if (std.hash.Wyhash.hash(0, keyword) == hashed) {
+            if (std.mem.eql(u8, keyword, name))
+                return true;
+        }
+    }
+    return false;
+}
+
+fn writeReplaceKeyword(name: []const u8, writer: anytype) !void {
+    if (isKeyword(name)) {
+        try writer.writeAll("@\"");
+        try writer.writeAll(name);
+        try writer.writeAll("\"");
+    } else {
+        try writer.writeAll(name);
+    }
+}
+
 // This is effectively like a functor (a parametrerized module) in OCaml.
 pub fn Refactor(comptime W: type) type {
     return struct {
@@ -161,6 +184,7 @@ pub fn Refactor(comptime W: type) type {
                 _ = ancestors.pop();
 
                 while (ancestors.popOrNull()) |child_node_id| {
+                    var is_field = false;
                     const parent_nested_nodes = try current_node.getNestedNodes();
                     const scope_name: []const u8 = result: for (0..parent_nested_nodes.length) |i| {
                         const nested_node = parent_nested_nodes.get(@intCast(i));
@@ -174,13 +198,20 @@ pub fn Refactor(comptime W: type) type {
                             const field = fields.get(@intCast(i));
                             if (field.getGroup()) |group| {
                                 if (group.getTypeId() == child_node_id) {
+                                    is_field = true;
                                     break :result try field.getName();
                                 }
                             }
                         }
                         @panic("No link from parent to child – this should never happen");
                     };
-                    try self.writer.print(".{s}", .{scope_name});
+
+                    try self.writer.writeAll(".");
+                    if (is_field) {
+                        try writeReplaceKeyword(scope_name, self.writer);
+                    } else {
+                        try self.writer.writeAll(scope_name);
+                    }
                     current_node = self.getNodeById(child_node_id);
                 }
             }
@@ -191,17 +222,25 @@ pub fn Refactor(comptime W: type) type {
 
             pub fn openGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
                 const name = try field.getName();
-                const typ = try field.getSlot().?.getType();
                 try ctx.writeIndent();
-                try ctx.writer.print("pub fn get{}(self: @This()) {} {{\n", .{ capitalized(name), typed(.{
-                    .ctx = ctx,
-                    .typ = typ,
-                    .gt = switch (gt) {
-                        .reader => .reader_getter,
-                        .builder => .builder_getter,
+                const tgt: type_context = switch (gt) {
+                    .reader => .reader_getter,
+                    .builder => .builder_getter,
+                };
+                switch (field.which()) {
+                    .slot => {
+                        const typ = try field.getSlot().?.getType();
+                        try ctx.writer.print("pub fn get{}(self: @This()) ", .{capitalized(name)});
+                        try writeType(ctx, typ, tgt, true);
+                        try ctx.writer.writeAll(" {\n");
                     },
-                    .with_error = true,
-                }) });
+                    .group => {
+                        try ctx.writer.print("pub fn get{}(self: @This()) ", .{capitalized(name)});
+                        try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
+                        try ctx.writer.writeAll(" {\n");
+                    },
+                    else => {},
+                }
                 ctx.indenter.inc();
             }
 
@@ -326,7 +365,8 @@ pub fn Refactor(comptime W: type) type {
                             const field = fields.get(@intCast(i));
                             if (field.getDiscriminantValue() == 0xffff) continue;
                             try ctx.writeIndent();
-                            try ctx.writer.print("{s} = {},\n", .{ try field.getName(), field.getDiscriminantValue() });
+                            try writeReplaceKeyword(try field.getName(), ctx.writer);
+                            try ctx.writer.print(" = {},\n", .{field.getDiscriminantValue()});
                         }
 
                         ctx.indenter.dec();
@@ -378,13 +418,13 @@ pub fn Refactor(comptime W: type) type {
         pub fn writeGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
             const target = gt.toString();
 
+            try ctx.openGetter(field, gt);
+            try ctx.writeIndent();
+
             switch (field.which()) {
                 .slot => {
                     const slot = field.getSlot().?;
                     const t = try slot.getType();
-
-                    try ctx.openGetter(field, gt);
-                    try ctx.writeIndent();
 
                     switch (t.which()) {
                         .void => {
@@ -443,7 +483,7 @@ pub fn Refactor(comptime W: type) type {
                                     typed(.{ .typ = try (try field.getSlot().?.getType()).getList().?.getElementType(), .ctx = ctx, .gt = switch (gt) {
                                         .reader => .reader_getter,
                                         .builder => .builder_getter,
-                                    }, .with_error = true }),
+                                    }, .with_error = false }),
                                     field.getSlot().?.getOffset(),
                                 },
                             );
@@ -455,17 +495,24 @@ pub fn Refactor(comptime W: type) type {
                         },
                         else => {},
                     }
-                    try ctx.closeGetter();
                 },
                 .group => {
                     if (field.getGroup().?.getTypeId() == 0) {
                         std.debug.print("Problem with group {s} {}\n", .{ try field.getName(), field.getGroup().?.getTypeId() });
                         @panic("ERROR");
                     }
-                    try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
+
+                    switch (gt) {
+                        .reader => try ctx.writer.writeAll("return .{ .reader = self.reader };\n"),
+                        .builder => try ctx.writer.writeAll("return .{ .builder = self.builder };\n"),
+                    }
+
+                    // try ctx.writeIndent();
+                    // try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
                 },
                 else => {},
             }
+            try ctx.closeGetter();
         }
 
         pub fn writeSetter(ctx: *WriteContext, field: schema.Field.Reader) E!void {
@@ -652,7 +699,10 @@ test "compiler" {
     // var buf = std.mem.zeroes([65 * 1024]u8);
     // var fbs = std.io.fixedBufferStream(&buf);
     // const writer = fbs.writer();
-    const writer = std.io.getStdOut().writer();
+    // const writer = std.io.getStdOut().writer();
+    //
+    const outf = try std.fs.cwd().createFile("/dev/shm/testoutput.zig", .{});
+    const writer = outf.writer();
 
     const M = Refactor(@TypeOf(writer));
 
