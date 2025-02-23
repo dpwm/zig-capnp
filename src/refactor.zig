@@ -334,7 +334,7 @@ pub fn Refactor(comptime W: type) type {
 
                     try ctx.writeIndent();
                     ctx.indenter.dec();
-                    try ctx.writer.writeAll("}\n");
+                    try ctx.writer.writeAll("};\n");
                 },
 
                 .interface => {
