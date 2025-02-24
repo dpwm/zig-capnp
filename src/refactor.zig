@@ -604,7 +604,13 @@ pub fn Refactor(comptime W: type) type {
                     }
                 },
                 .group => {
-                    try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
+                    if (field.getGroup().?.getTypeId() == 0) {
+                        std.debug.print("Problem with group {s} {}\n", .{ try field.getName(), field.getGroup().?.getTypeId() });
+                        @panic("ERROR");
+                    }
+
+                    // Write nothing
+                    // try ctx.writeIndent();
                 },
                 else => {},
             }
