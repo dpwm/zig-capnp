@@ -250,6 +250,12 @@ pub fn Refactor(comptime W: type) type {
                 ctx.indenter.inc();
             }
 
+            pub fn openVoidSetter(ctx: *WriteContext, name: []const u8) E!void {
+                try ctx.writeIndent();
+                try ctx.writer.print("pub fn set{s}(self: @This()) void {{\n", .{capitalized(name)});
+                ctx.indenter.inc();
+            }
+
             pub fn closeGetter(ctx: *WriteContext) E!void {
                 ctx.indenter.dec();
                 try ctx.writeIndent();
@@ -433,7 +439,7 @@ pub fn Refactor(comptime W: type) type {
                     switch (t.which()) {
                         .void => {
                             {
-                                try ctx.writer.writeAll("return void{};\n");
+                                try ctx.writer.writeAll("return self.reader.readVoid();\n");
                             }
                         },
                         .bool => {
@@ -497,6 +503,12 @@ pub fn Refactor(comptime W: type) type {
                             try ctx.writeNodeNameById((try field.getSlot().?.getType()).getStruct().?.getTypeId());
                             try ctx.writer.print(", {d});\n", .{field.getSlot().?.getOffset()});
                         },
+                        .anyPointer => {
+                            switch (gt) {
+                                .reader => try ctx.writer.print("return self.reader.readAnyPointer({});\n", .{field.getSlot().?.getOffset()}),
+                                .builder => try ctx.writer.print("return self.builder.writeAnyPointer({});\n", .{field.getSlot().?.getOffset()}),
+                            }
+                        },
                         else => {},
                     }
                 },
@@ -527,9 +539,9 @@ pub fn Refactor(comptime W: type) type {
 
                     switch (t.which()) {
                         .void => {
-                            try ctx.openSetter(try field.getName(), "void", "void");
+                            try ctx.openVoidSetter(try field.getName());
                             try ctx.writeIndent();
-                            try ctx.writer.writeAll("return;\n");
+                            try ctx.writer.writeAll("_ = self; return;\n");
                             try ctx.closeSetter();
                         },
 
@@ -601,6 +613,13 @@ pub fn Refactor(comptime W: type) type {
                             try ctx.writeIndent();
 
                             try ctx.writer.print("return self.builder.setStructField({}, {d}, value);\n", .{ typed(.{ .ctx = ctx, .gt = .base, .typ = t, .with_error = false }), slot.getOffset() });
+                            try ctx.closeSetter();
+                        },
+
+                        .anyPointer => {
+                            try ctx.openSetter(try field.getName(), "capnp.AnyPointerReader", "capnp.Error!void");
+                            try ctx.writeIndent();
+                            try ctx.writer.print("return self.builder.setAnyPointerField({d}, value);", .{field.getSlot().?.getOffset()});
                             try ctx.closeSetter();
                         },
 

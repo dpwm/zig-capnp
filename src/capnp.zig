@@ -226,6 +226,8 @@ pub const StructReader = struct {
         }
     }
 
+    pub fn readVoid(_: StructBuilder) void {}
+
     pub fn readStringField(self: StructReader, ptrNo: u16) Counter.Error![]u8 {
         return (try self.readPtrField(ListReader(u8), ptrNo)).getString();
     }
@@ -284,6 +286,8 @@ pub const StructBuilder = struct {
         };
         return @bitCast(self.readIntField(U, offset));
     }
+
+    pub fn readVoid(_: StructBuilder) void {}
 
     pub fn writeFloatField(self: StructBuilder, comptime T: type, offset: u32, value: T) void {
         const U = comptime switch (T) {
