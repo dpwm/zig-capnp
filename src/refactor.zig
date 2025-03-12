@@ -360,10 +360,6 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.writer.print("const {s} = struct {{\n", .{name});
                     ctx.indenter.inc();
 
-                    try ctx.writeIndent();
-                    try ctx.writer.writeAll("const Reader = struct {\n");
-                    ctx.indenter.inc();
-
                     const fields = try node.getStruct().?.getFields();
 
                     if (node.getStruct().?.getDiscriminantCount() > 0) {
@@ -378,11 +374,17 @@ pub fn Refactor(comptime W: type) type {
                             try writeReplaceKeyword(try field.getName(), ctx.writer);
                             try ctx.writer.print(" = {},\n", .{field.getDiscriminantValue()});
                         }
+                        try ctx.writeIndent();
+                        try ctx.writer.writeAll("_,\n");
 
                         ctx.indenter.dec();
                         try ctx.writeIndent();
                         try ctx.writer.writeAll("};\n\n");
                     }
+
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("const Reader = struct {\n");
+                    ctx.indenter.inc();
 
                     for (0..fields.length) |i| {
                         try writeGetter(ctx, fields.get(@intCast(i)), .reader);
