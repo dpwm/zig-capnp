@@ -359,12 +359,14 @@ pub fn Refactor(comptime W: type) type {
                     try ctx.writeIndent();
                     try ctx.writer.print("const {s} = struct {{\n", .{name});
                     ctx.indenter.inc();
+                    try ctx.writeIndent();
+                    try ctx.writer.print("pub const id: u64 = 0x{x};\n", .{node.getId()});
 
                     const fields = try node.getStruct().?.getFields();
 
                     if (node.getStruct().?.getDiscriminantCount() > 0) {
                         try ctx.writeIndent();
-                        try ctx.writer.writeAll("const Tag = enum(u16) {\n");
+                        try ctx.writer.writeAll("pub const Tag = enum(u16) {\n");
                         ctx.indenter.inc();
 
                         for (0..fields.length) |i| {
