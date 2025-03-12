@@ -389,7 +389,12 @@ pub fn Refactor(comptime W: type) type {
                     ctx.indenter.inc();
 
                     for (0..fields.length) |i| {
-                        try writeGetter(ctx, fields.get(@intCast(i)), .reader);
+                        try writeGetter(
+                            ctx,
+                            node.getStruct().?.getDiscriminantOffset(),
+                            fields.get(@intCast(i)),
+                            .reader,
+                        );
                         try ctx.writer.writeAll("\n\n");
                     }
 
@@ -409,7 +414,12 @@ pub fn Refactor(comptime W: type) type {
                     ctx.indenter.inc();
 
                     for (0..fields.length) |i| {
-                        try writeGetter(ctx, fields.get(@intCast(i)), .builder);
+                        try writeGetter(
+                            ctx,
+                            node.getStruct().?.getDiscriminantOffset(),
+                            fields.get(@intCast(i)),
+                            .builder,
+                        );
                         try ctx.writer.writeAll("\n\n");
                         try writeSetter(ctx, fields.get(@intCast(i)));
                         try ctx.writer.writeAll("\n\n");
@@ -429,10 +439,16 @@ pub fn Refactor(comptime W: type) type {
             }
         }
 
-        pub fn writeGetter(ctx: *WriteContext, field: schema.Field.Reader, gt: getter_type) E!void {
+        pub fn writeGetter(ctx: *WriteContext, discriminantOffset: u32, field: schema.Field.Reader, gt: getter_type) E!void {
             const target = gt.toString();
 
             try ctx.openGetter(field, gt);
+
+            if (field.getDiscriminantValue() != 0xffff) {
+                try ctx.writeIndent();
+                try ctx.writer.print("if (self.{s}.readIntField(u16, {}) != {}) {{ return null; }}\n", .{ target, discriminantOffset, field.getDiscriminantValue() });
+            }
+
             try ctx.writeIndent();
 
             switch (field.which()) {
@@ -724,7 +740,7 @@ test "field" {
     // try std.testing.expectEqualStrings("i32", fbs.getWritten());
 
     fbs.reset();
-    try M.writeGetter(&ctx, reader, .reader);
+    try M.writeGetter(&ctx, 0, reader, .reader);
     try std.testing.expectEqualStrings("pub fn get(self: @This()) i32 {\n    return self.reader.readIntField(i32, 3);\n}", fbs.getWritten());
 }
 
