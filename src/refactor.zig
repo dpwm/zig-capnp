@@ -108,7 +108,7 @@ pub fn Refactor(comptime W: type) type {
         };
 
         fn typedFn(ctx: TypedContext, writer: anytype) @TypeOf(writer).Error!void {
-            const out = writeType(ctx.ctx, ctx.typ, ctx.gt, ctx.with_error);
+            const out = writeType(ctx.ctx, ctx.typ, ctx.gt, ctx.with_error, false);
 
             return out catch |err| switch (err) {
                 error.LimitExceeded => {
@@ -231,11 +231,14 @@ pub fn Refactor(comptime W: type) type {
                     .slot => {
                         const typ = try field.getSlot().?.getType();
                         try ctx.writer.print("pub fn get{}(self: @This()) ", .{capitalized(name)});
-                        try writeType(ctx, typ, tgt, true);
+                        try writeType(ctx, typ, tgt, true, field.getDiscriminantValue() != 0xffff);
                         try ctx.writer.writeAll(" {\n");
                     },
                     .group => {
                         try ctx.writer.print("pub fn get{}(self: @This()) ", .{capitalized(name)});
+                        if (field.getDiscriminantValue() != 0xffff) {
+                            try ctx.writer.writeAll("?");
+                        }
                         try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
                         try ctx.writer.writeAll(" {\n");
                     },
@@ -269,7 +272,7 @@ pub fn Refactor(comptime W: type) type {
             return name[0..1] ++ name[n..];
         }
 
-        pub fn writeType(ctx: *WriteContext, reader: schema.Type.Reader, gt: type_context, with_error: bool) E!void {
+        pub fn writeType(ctx: *WriteContext, reader: schema.Type.Reader, gt: type_context, with_error: bool, is_optional: bool) E!void {
             if (with_error) {
                 switch (reader.which()) {
                     .list, .data, .text, .struct_ => {
@@ -277,6 +280,9 @@ pub fn Refactor(comptime W: type) type {
                     },
                     else => {},
                 }
+            }
+            if (is_optional) {
+                try ctx.writer.writeAll("?");
             }
             const out = switch (reader.which()) {
                 .void => "void",
@@ -288,7 +294,7 @@ pub fn Refactor(comptime W: type) type {
                 .data => "[]const u8",
                 .list => {
                     try ctx.writer.writeAll("capnp.List(");
-                    try writeType(ctx, try reader.getList().?.getElementType(), .base, false);
+                    try writeType(ctx, try reader.getList().?.getElementType(), .base, false, false);
                     try ctx.writer.writeAll(")");
                     try ctx.writer.writeAll(switch (gt) {
                         .base => "",
@@ -681,7 +687,7 @@ test "simple" {
 
     const reader = try message.getRootStruct(schema.Type);
 
-    try M.writeType(&ctx, reader, .reader_getter, true);
+    try M.writeType(&ctx, reader, .reader_getter, true, false);
 
     try std.testing.expectEqualStrings("void", fbs.getWritten());
 }
@@ -708,11 +714,11 @@ test "writeReaderGetterReturnType" {
     const fields = try reader.getStruct().?.getFields();
 
     fbs.reset();
-    try M.writeType(&ctx, try fields.get(0).getSlot().?.getType(), .reader_getter, true);
+    try M.writeType(&ctx, try fields.get(0).getSlot().?.getType(), .reader_getter, true, false);
     try std.testing.expectEqualStrings("void", fbs.getWritten());
 
     fbs.reset();
-    try M.writeType(&ctx, try fields.get(1).getSlot().?.getType(), .reader_getter, true);
+    try M.writeType(&ctx, try fields.get(1).getSlot().?.getType(), .reader_getter, true, false);
     try std.testing.expectEqualStrings("bool", fbs.getWritten());
 }
 
@@ -735,7 +741,7 @@ test "field" {
     };
 
     const reader = try message.getRootStruct(schema.Field);
-    try M.writeType(&ctx, try reader.getSlot().?.getType(), .reader_getter, true);
+    try M.writeType(&ctx, try reader.getSlot().?.getType(), .reader_getter, true, false);
 
     // try std.testing.expectEqualStrings("i32", fbs.getWritten());
 
