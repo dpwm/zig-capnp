@@ -554,6 +554,12 @@ pub fn Refactor(comptime W: type) type {
                                 .builder => try ctx.writer.print("return self.builder.writeAnyPointer({});\n", .{field.getSlot().?.getOffset()}),
                             }
                         },
+                        .enum_ => {
+                            switch (gt) {
+                                .reader => try ctx.writer.print("return @enumFromInt(self.reader.readIntField(u16, {}));\n", .{field.getSlot().?.getOffset()}),
+                                .builder => try ctx.writer.print("return @enumFromInt(self.builder.readIntField(u16, {}));\n", .{field.getSlot().?.getOffset()}),
+                            }
+                        },
                         else => {},
                     }
                 },
