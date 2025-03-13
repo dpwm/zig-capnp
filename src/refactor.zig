@@ -338,14 +338,14 @@ pub fn Refactor(comptime W: type) type {
 
                 .@"enum" => {
                     try ctx.writeIndent();
-                    try ctx.writer.print("const {s} = enum {{\n", .{name});
+                    try ctx.writer.print("const {s} = enum(u16) {{\n", .{name});
                     ctx.indenter.inc();
 
                     const enumerants = try node.getEnum().?.getEnumerants();
                     for (0..enumerants.length) |i| {
                         const enumerant = enumerants.get(@intCast(i));
                         try ctx.writeIndent();
-                        try ctx.writer.print("{s},\n", .{try enumerant.getName()});
+                        try ctx.writer.print("{s} = {d},\n", .{ try enumerant.getName(), i });
                     }
 
                     try ctx.writeIndent();
@@ -363,10 +363,12 @@ pub fn Refactor(comptime W: type) type {
 
                 .@"struct" => {
                     try ctx.writeIndent();
-                    try ctx.writer.print("const {s} = struct {{\n", .{name});
+                    try ctx.writer.writeAll("pub const ");
+                    try writeReplaceKeyword(name, ctx.writer);
+                    try ctx.writer.writeAll(" = struct {\n");
                     ctx.indenter.inc();
                     try ctx.writeIndent();
-                    try ctx.writer.print("pub const id: u64 = 0x{x};\n", .{node.getId()});
+                    try ctx.writer.print("pub const id: u64 = 0x{x};\n\n", .{node.getId()});
 
                     const fields = try node.getStruct().?.getFields();
 
@@ -388,11 +390,25 @@ pub fn Refactor(comptime W: type) type {
                         ctx.indenter.dec();
                         try ctx.writeIndent();
                         try ctx.writer.writeAll("};\n\n");
+
+                        for (0..fields.length) |i| {
+                            const field = fields.get(@intCast(i));
+                            if (field.getDiscriminantValue() == 0xffff) continue;
+                            if (field.which() != .group) continue;
+
+                            try writeNode(ctx, try field.getName(), ctx.getNodeById(field.getGroup().?.getTypeId()));
+                            // try ctx.writeIndent();
+                            // try writeReplaceKeyword(try field.getName(), ctx.writer);
+                            // try ctx.writer.print(" = {},\n", .{field.getDiscriminantValue()});
+                        }
                     }
 
                     try ctx.writeIndent();
-                    try ctx.writer.writeAll("const Reader = struct {\n");
+                    try ctx.writer.writeAll("pub const Reader = struct {\n");
                     ctx.indenter.inc();
+
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("reader: capnp.StructReader,\n\n");
 
                     for (0..fields.length) |i| {
                         try writeGetter(
@@ -413,11 +429,14 @@ pub fn Refactor(comptime W: type) type {
 
                     ctx.indenter.dec();
                     try ctx.writeIndent();
-                    try ctx.writer.writeAll("};\n");
+                    try ctx.writer.writeAll("};\n\n");
 
                     try ctx.writeIndent();
-                    try ctx.writer.writeAll("const Builder = struct {\n");
+                    try ctx.writer.writeAll("pub const Builder = struct {\n");
                     ctx.indenter.inc();
+
+                    try ctx.writeIndent();
+                    try ctx.writer.writeAll("builder: capnp.StructBuilder,\n\n");
 
                     for (0..fields.length) |i| {
                         try writeGetter(
@@ -433,11 +452,11 @@ pub fn Refactor(comptime W: type) type {
 
                     ctx.indenter.dec();
                     try ctx.writeIndent();
-                    try ctx.writer.writeAll("};\n");
+                    try ctx.writer.writeAll("};\n\n");
 
                     ctx.indenter.dec();
                     try ctx.writeIndent();
-                    try ctx.writer.writeAll("};\n");
+                    try ctx.writer.writeAll("};\n\n");
                 },
                 _ => {
                     @panic("Unknown node type");
