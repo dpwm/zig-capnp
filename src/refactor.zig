@@ -493,6 +493,8 @@ pub fn Refactor(comptime W: type) type {
                         inline .int8, .int16, .int32, .int64, .uint8, .uint16, .uint32, .uint64 => |typeTag| {
                             const typeTagName = @tagName(typeTag);
 
+                            // const defaultValue = try slot.getDefaultValue();
+
                             try ctx.writer.print(
                                 "return self.{s}.readIntField({s}, {});\n",
                                 .{
