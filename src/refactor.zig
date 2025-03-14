@@ -240,6 +240,7 @@ pub fn Refactor(comptime W: type) type {
                             try ctx.writer.writeAll("?");
                         }
                         try ctx.writeNodeNameById(field.getGroup().?.getTypeId());
+                        try ctx.writer.print(".{s}", .{capitalized(gt.toString())});
                         try ctx.writer.writeAll(" {\n");
                     },
                     else => {},
@@ -409,6 +410,21 @@ pub fn Refactor(comptime W: type) type {
 
                     try ctx.writeIndent();
                     try ctx.writer.writeAll("reader: capnp.StructReader,\n\n");
+
+                    if (node.getStruct().?.getDiscriminantCount() > 0) {
+                        try ctx.writeIndent();
+                        try ctx.writer.writeAll("pub fn which(self: @This()) ");
+                        try ctx.writeNodeName(node);
+                        try ctx.writer.writeAll(".Tag {\n");
+                        ctx.indenter.inc();
+
+                        try ctx.writeIndent();
+                        try ctx.writer.print("return @enumFromInt(self.reader.readIntField(u16, {d}));\n", .{node.getStruct().?.getDiscriminantOffset()});
+
+                        ctx.indenter.dec();
+                        try ctx.writeIndent();
+                        try ctx.writer.writeAll("}\n\n");
+                    }
 
                     for (0..fields.length) |i| {
                         try writeGetter(
